@@ -10,7 +10,6 @@
 // @grant          GM_setValue
 // @grant          GM_xmlhttpRequest
 // @require        https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js
-// @require        https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2014-11-29/FileSaver.min.js
 // @version        0.1
 // ==/UserScript==
 
