@@ -1,7 +1,9 @@
 // ==UserScript==
-// @name           unlimited favs
+// @name           unlimited favs dev
 // @namespace      zeratax@firemail.cc
 // @description    Adds unlimited local favorite lists to sadpanda
+// @updateURL      https://openuserjs.org/meta/ZerataX/unlimited_favs.meta.js
+// @downloadURL    https://openuserjs.org/install/ZerataX/unlimited_favs.user.js
 // @include        http://g.e-hentai.org/*
 // @include        https://g.e-hentai.org/*
 // @include        http://exhentai.org/*
@@ -10,7 +12,7 @@
 // @grant          GM_setValue
 // @grant          GM_xmlhttpRequest
 // @require        https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js
-// @version        0.2
+// @version        0.3
 // ==/UserScript==
 
 function script_log(message) {
@@ -220,8 +222,6 @@ if(window.location.pathname.includes("favorites.php")) {
         }
         var sadpandaRequest = '{  "method": "gdata",  "gidlist": [' + gidlist +']}';
         var sadpandaInfo;
-        script_log(sadpandaRequest);
-
         var ret = GM_xmlhttpRequest({
             method: "POST",
             data: sadpandaRequest,
@@ -265,8 +265,42 @@ if(window.location.pathname.includes("favorites.php")) {
                             note_field = `<div style="font-style:italic; clear:both; padding:3px 0 1px 5px; display:" id="favnote_` + sadpandaInfo["gmetadata"][j-(current_page*25)]["gid"] + `">`+note+`</div>`;
                         }
                         var thumb_img = $(".unl.fav.thumb");
-                        $(".it2").attr("style", "border: 2px solid rgb(255, 0, 0); top: -52.5px; left: -216px; height: "+thumb_img.clientHeight+"px; width: "+thumb_img.clientWidth+"px; visibility: hidden;");
-                        $("tbody").eq(1).append(`<tr class="gtr`+color+` color`+color+`"><td class="itdc"><img src="` + image_domain + `/c/`+  sadpandaInfo["gmetadata"][j-(current_page*25)]["category"].toLowerCase().replace(" sets", "").replace(" ", "")+`.png" alt="` + sadpandaInfo["gmetadata"][j-(current_page*25)]["category"] + `" class="ic"></td><td class="itd" style="white-space:nowrap">` + timeConverter(sadpandaInfo["gmetadata"][j-(current_page*25)]["posted"]) + `</td><td class="itd"><div style="position:relative"><div class="it2" id="i` + sadpandaInfo["gmetadata"][j-(current_page*25)]["gid"] + `" style="border: 2px solid rgb(255, 0, 0); top: -52.5px; left: -216px; height: 101px; width: 200px; visibility: hidden;"><img class="unl fav thumb" src="` + sadpandaInfo["gmetadata"][j-(current_page*25)]["thumb"] + `" alt="` + sadpandaInfo["gmetadata"][j-(current_page*25)]["title"] +`" style="margin:0"></div><div class="it3"><div onclick="return popUp('` + current_domain + `/gallerypopups.php?gid=` + sadpandaInfo["gmetadata"][j-(current_page*25)]["gid"] + `&amp;t=` + sadpandaInfo["gmetadata"][j-(current_page*25)]["token"] +`&amp;act=addfav',675,415)" class="i" id="favicon_` + sadpandaInfo["gmetadata"][j-(current_page*25)]["gid"] + `" style="` + fav_icon + `; cursor:pointer" title="` + favs["lists"][current_fav-10]["name"] + `"></div>`+download_button+`</div><div class="it5"><a href="`+ current_domain + `/g/` + favs["lists"][current_fav-10]["galleries"][j]["gid"]+ `/` + favs["lists"][current_fav-10]["galleries"][j]["gt"]+ `" onmouseover="show_image_pane(` + favs["lists"][current_fav-10]["galleries"][j]["gid"] + `)" onmouseout="hide_image_pane(` + favs["lists"][current_fav-10]["galleries"][j]["gid"] + `)">` + sadpandaInfo["gmetadata"][j-(current_page*25)]["title"] + `</a></div><div class="it4">`+rate_list+`</div></div>`+note_field+`</td><td class="itd" style="white-space:nowrap">` + year +`-`+monthIndex+`-`+day + ` ` + hour +`:` + minute +`</td><td style="text-align:center"><input class="inp unlfav" type="checkbox" " name="modifygids[]" value="` +  favs["lists"][current_fav-10]["galleries"][j]["gid"] + `"></td></tr>`);
+                        var category_color;
+                        switch (sadpandaInfo["gmetadata"][j-(current_page*25)]["category"].toLowerCase()) {
+                            case "doujinshi":
+                                category_color = "rgb(255, 0, 0)";
+                                break;
+                            case "game cg sets":
+                                category_color = "rgb(0, 128, 0)";
+                                break;
+                            case "non-h":
+                                category_color = "#16FFFC";
+                                break;
+                            case "manga":
+                                category_color = "#FFA500";
+                                break;
+                            case "artist cg sets":
+                                category_color = "#FFFF00";
+                                break;
+                            case "asian porn":
+                                category_color = "rgb(238, 130, 238)";
+                                break;
+                            case "image sets":
+                                category_color = "rgb(0, 0, 255)";
+                                break;
+                            case "western":
+                                category_color = "rgb(137, 255, 22)";
+                                break;
+                            case "cosplay":
+                                category_color = "#4B0082";
+                                break;
+                            case "misc":
+                                category_color = "#000000";
+                                break;
+                        }
+                        $("tbody").eq(1).append(`<tr class="gtr`+color+` color`+color+`"><td class="itdc"><img src="` + image_domain + `/c/`+  sadpandaInfo["gmetadata"][j-(current_page*25)]["category"].toLowerCase().replace("image sets","imageset").replace(" sets", "").replace(" ", "")+`.png" alt="` + sadpandaInfo["gmetadata"][j-(current_page*25)]["category"] + `" class="ic"></td><td class="itd" style="white-space:nowrap">` + timeConverter(sadpandaInfo["gmetadata"][j-(current_page*25)]["posted"]) + `</td><td class="itd"><div style="position:relative"><div class="it2" id="i` + sadpandaInfo["gmetadata"][j-(current_page*25)]["gid"] + `" style="border: 2px solid rgb(255, 0, 0); top: -52.5px; left: -216px; height: 101px; width: 200px; visibility: hidden;"><img class="unl fav thumb" src="` + sadpandaInfo["gmetadata"][j-(current_page*25)]["thumb"] + `" alt="` + sadpandaInfo["gmetadata"][j-(current_page*25)]["title"] +`" style="margin:0"></div><div class="it3"><div onclick="return popUp('` + current_domain + `/gallerypopups.php?gid=` + sadpandaInfo["gmetadata"][j-(current_page*25)]["gid"] + `&amp;t=` + sadpandaInfo["gmetadata"][j-(current_page*25)]["token"] +`&amp;act=addfav',675,415)" class="i" id="favicon_` + sadpandaInfo["gmetadata"][j-(current_page*25)]["gid"] + `" style="` + fav_icon + `; cursor:pointer" title="` + favs["lists"][current_fav-10]["name"] + `"></div>`+download_button+`</div><div class="it5"><a href="`+ current_domain + `/g/` + favs["lists"][current_fav-10]["galleries"][j]["gid"]+ `/` + favs["lists"][current_fav-10]["galleries"][j]["gt"]+ `" onmouseover="show_image_pane(` + favs["lists"][current_fav-10]["galleries"][j]["gid"] + `)" onmouseout="hide_image_pane(` + favs["lists"][current_fav-10]["galleries"][j]["gid"] + `)">` + sadpandaInfo["gmetadata"][j-(current_page*25)]["title"] + `</a></div><div class="it4">`+rate_list+`</div></div>`+note_field+`</td><td class="itd" style="white-space:nowrap">` + year +`-`+monthIndex+`-`+day + ` ` + hour +`:` + minute +`</td><td style="text-align:center"><input class="inp unlfav" type="checkbox" " name="modifygids[]" value="` +  favs["lists"][current_fav-10]["galleries"][j]["gid"] + `"></td></tr>`);
+                        $("#i"+favs["lists"][current_fav-10]["galleries"][j]["gid"]).attr("style", "border: 2px solid "+category_color+"; top: -52.5px; left: -216px; height: "+thumb_img.clientHeight+"px; width: "+thumb_img.clientWidth+"px; visibility: hidden;");
+
                     }
                     if(j ==  (current_page*25)+24){
                         break;
