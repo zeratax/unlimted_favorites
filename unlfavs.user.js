@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name           unlimited favs dev
+// @name           unlimited favs
 // @namespace      zeratax@firemail.cc
 // @description    Adds unlimited local favorite lists to sadpanda
 // @updateURL      https://openuserjs.org/meta/ZerataX/unlimited_favs.meta.js
