@@ -12,7 +12,7 @@
 // @grant          GM_setValue
 // @grant          GM_xmlhttpRequest
 // @require        https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js
-// @version        0.3
+// @version        0.4
 // ==/UserScript==
 
 function script_log(message) {
