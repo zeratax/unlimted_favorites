@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name           unlimited favs
 // @namespace      zeratax@firemail.cc
-// @description    Adds unlimited local favorite tabs
+// @description    Adds unlimited local favorite lists to sadpanda
 // @include        http://g.e-hentai.org/*
 // @include        https://g.e-hentai.org/*
 // @include        http://exhentai.org/*
