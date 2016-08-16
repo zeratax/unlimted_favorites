@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name           unlimited favs dev
+// @name           unlimited favs
 // @namespace      zeratax@firemail.cc
 // @description    Adds unlimited local favorite tabs
 // @include        http://g.e-hentai.org/*
