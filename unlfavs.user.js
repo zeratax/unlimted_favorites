@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name           unlimited favs
+// @name           unlimited favs dev
 // @namespace      zeratax@firemail.cc
-// @description    Adds unlimited local favorite lists for sadpanda
+// @description    Adds unlimited local favorite tabs
 // @include        http://g.e-hentai.org/*
 // @include        https://g.e-hentai.org/*
 // @include        http://exhentai.org/*
@@ -57,11 +57,9 @@ var display_galleries = [];
 if(window.location.hostname == "exhentai.org"){
     var fav_icon = "background-image:url(https://exhentai.org/img/fav.png); background-position:0px -172px";
     var image_domain = "https://exhentai.org/img";
-    
 }else{
     var fav_icon = "background-image:url(http://ehgt.org/g/fav.png); background-position:0px -172px";
     var image_domain = "http://ehgt.org/g";
-    
 }
 
 
