@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name           unlimited favs
+// @name           unlimited favs dev
 // @namespace      zeratax@firemail.cc
 // @description    Adds unlimited local favorite lists to sadpanda
 // @updateURL      https://openuserjs.org/meta/ZerataX/unlimited_favs.meta.js
@@ -12,7 +12,7 @@
 // @grant          GM_setValue
 // @grant          GM_xmlhttpRequest
 // @require        https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js
-// @version        0.4
+// @version        0.5
 // ==/UserScript==
 
 function script_log(message) {
@@ -194,19 +194,26 @@ if(window.location.pathname.includes("favorites.php")) {
             }
         }
         if(favs["lists"][current_fav-10]["galleries"].length > 25){
-            $("tr").html('<td onclick="document.location=this.firstChild.href"><a href="' + getNextPage(window.location.href,(current_page-1)) + '" onclick="return false">&lt;</a></td>');
+            $("tr").first().html('<td onclick="document.location=this.firstChild.href"><a href="' + getNextPage(window.location.href,(current_page-1)) + '" onclick="return false; location.reload();">&lt;</a></td>');
+            $("tr").last().html('<td onclick="document.location=this.firstChild.href"><a href="' + getNextPage(window.location.href,(current_page-1)) + '" onclick="return false; location.reload();">&lt;</a></td>');
             for (var j = 0; j < Math.ceil((favs["lists"][current_fav-10]["galleries"].length)/25); j++) {
                 if(j == current_page){
-                    $("tr").append('<td class="ptds"><a href="' + window.location.href + '" onclick="return false">' + (j+1) + '</a></td>');
+                    $("tr").first().append('<td class="ptds"><a href="' + window.location.href + '" onclick="return false">' + (j+1) + '</a></td>');
+                    $("tr").last().append('<td class="ptds"><a href="' + window.location.href + '" onclick="return false">' + (j+1) + '</a></td>');
+
                 }else{
-                    $("tr").append('<td onclick="document.location=this.firstChild.href"><a href="' + getNextPage(window.location.href,j) + '" onclick="return false">' + (j+1) + '</a></td>');
+                    $("tr").first().append('<td onclick="document.location=this.firstChild.href"><a href="' + getNextPage(window.location.href,j) + '" onclick="return false; location.reload();">' + (j+1) + '</a></td>');
+                    $("tr").last().append('<td onclick="document.location=this.firstChild.href"><a href="' + getNextPage(window.location.href,j) + '" onclick="return false; location.reload();">' + (j+1) + '</a></td>');
+
                 }
             }
             var next_page = (parseInt(current_page)+1);
             if(next_page > Math.ceil((favs["lists"][current_fav-10]["galleries"].length)/25)-1){
                 next_page = Math.ceil((favs["lists"][current_fav-10]["galleries"].length)/25)-1;
             }
-            $("tr").append('<td onclick="document.location=this.firstChild.href"><a href="'+ getNextPage(window.location.href,next_page) + '" onclick="return false">&gt;</a></td>');
+            $("tr").first().append('<td onclick="document.location=this.firstChild.href"><a href="'+ getNextPage(window.location.href,next_page) + '" onclick="return false; location.reload();">&gt;</a></td>');
+            $("tr").last().append('<td onclick="document.location=this.firstChild.href"><a href="'+ getNextPage(window.location.href,next_page) + '" onclick="return false; location.reload();">&gt;</a></td>');
+
         }
         $(".fp.fps").removeClass("fps");
         $(".id1").remove();
@@ -225,7 +232,7 @@ if(window.location.pathname.includes("favorites.php")) {
         var ret = GM_xmlhttpRequest({
             method: "POST",
             data: sadpandaRequest,
-            url: "http://exhentai.org/api.php",
+            url: "http://g.e-hentai.org/api.php",
             onload: function(res) {
                 sadpandaInfo = JSON.parse(res.responseText);
                 script_log(sadpandaInfo);
@@ -523,7 +530,7 @@ $(function(){
             var ret = GM_xmlhttpRequest({
                 method: "POST",
                 data: sadpandaRequest,
-                url: "http://exhentai.org/api.php",
+                url: "http://g.e-hentai.org/api.php",
                 onload: function(res) {
                     sadpandaInfo = JSON.parse(res.responseText);
                     script_log(sadpandaInfo);
