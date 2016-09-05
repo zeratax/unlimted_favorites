@@ -12,11 +12,11 @@ creates locally stored favorite lists for sadpanda
 Install from https://openuserjs.org/scripts/ZerataX/unlimited_favs
 
 Requires either **Greasemonkey** or *preferably* **Tampermonkey**
-####Firefox:
+###Firefox:
 [Tampermonkey](https://addons.mozilla.org/de/firefox/addon/tampermonkey/)
 
 [Greasemonkey](https://addons.mozilla.org/de/firefox/addon/greasemonkey/)
-####Chrome:
+###Chrome:
 [Tampermonkey](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo?hl=de)
 
 ## Troubleshooting:
