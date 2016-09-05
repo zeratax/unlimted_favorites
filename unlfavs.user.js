@@ -12,7 +12,7 @@
 // @grant          GM_setValue
 // @grant          GM_xmlhttpRequest
 // @require        https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js
-// @version        0.5
+// @version        0.6
 // ==/UserScript==
 
 function script_log(message) {
@@ -90,17 +90,16 @@ var QueryString = function () {
 function isEven(n) {
     return n % 2 == 0;
 }
-function getNextPage (url, page) {
-    if(page<0){page=0;}
-    var page_index = url.indexOf("page=");
-    if(page_index>-1){
-        var next_par_index = url.indexOf("&", page_index);
-        if(next_par_index == -1) {next_par_index = url.length-1;}
+function getNextPage (url, value, parameter) {
+    var param_index = url.indexOf(parameter);
+    if(param_index>-1){
+        var next_param_index = url.indexOf("&", param_index);
+        if(next_param_index == -1) {next_param_index = param_index+parameter.length+value.length;}
         url = url.split('');
-        url.splice((page_index+5), (next_par_index-(page_index+4)), page);
+        url.splice((param_index+parameter.length), (next_param_index), value);
         url = url.join('');
     }else{
-        url += "&page=" + page;
+        url += parameter + value;
     }
     return url;
 }
@@ -153,11 +152,29 @@ if(window.location.pathname.includes("/g/")) {
 if(window.location.pathname.includes("favorites.php")) {
     current_fav = QueryString.favcat;
     if(QueryString.page){
-        current_page = QueryString.page;
+       page = QueryString.page;
+    }else{
+    	page = -1;
+    }
+    if(QueryString.unlpage){
+       current_page = QueryString.unlpage;
+    }else{
+    	current_page = 0;
     }
     if(current_fav > 9){
+    	if(page < 9999){
+    	window.open(getNextPage(window.location.href,9999, "&page="),"_self");
+    }
         if($("div p").text()=="No hits found" && (favs["lists"][current_fav-10]["galleries"].length-(current_page*25))>0){
-            $("div p").replaceWith('<p class="ip" style="margin-top:5px">Showing 1-1 of 1</p>');
+        	visible_galleries = ((current_page*25)+25);
+        	var previous_page = (parseInt(current_page)-1);
+        	if(previous_page<0){previous_page = 0};
+        	var next_page = (parseInt(current_page)+1);
+            if(next_page > Math.ceil((favs["lists"][current_fav-10]["galleries"].length)/25)-1){
+                next_page = Math.ceil((favs["lists"][current_fav-10]["galleries"].length)/25)-1;
+                visible_galleries = favs["lists"][current_fav-10]["galleries"].length;
+            }
+            $("div p").replaceWith('<p class="ip" style="margin-top:5px">Showing '+ ((current_page*25)+1) +'-'+  visible_galleries +' of ' + favs["lists"][current_fav-10]["galleries"].length + '</p>');
             $("div p").after('<table class="ptt" style="margin:2px auto 0px"><tbody><tr><td class="ptdd">&lt;</td><td class="ptds"><a href="" onclick="return false">1</a></td><td class="ptdd">&gt;</td></tr></tbody></table>');
             var option_2 = `<a class="display" href="#" rel="nofollow">Show List</a>`;
             var option_1 = `<span style="font-weight:bold">Thumbnails</span>`;
@@ -193,26 +210,24 @@ if(window.location.pathname.includes("favorites.php")) {
                 $(".itg").append(`<tbody><tr><th style="width:92px">&nbsp;</th><th style="width:89px">` + option_5 + `</th><th style="min-width:610px">Name</th><th style="width:89px">` + option_6 + `</th><th style="width:34px; text-align:center"><input id="alltoggle" type="checkbox" onclick="toggle_all()"></th></tr></tbody>`);  
             }
         }
+
         if(favs["lists"][current_fav-10]["galleries"].length > 25){
-            $("tr").first().html('<td onclick="document.location=this.firstChild.href"><a href="' + getNextPage(window.location.href,(current_page-1)) + '" onclick="return false; location.reload();">&lt;</a></td>');
-            $("tr").last().html('<td onclick="document.location=this.firstChild.href"><a href="' + getNextPage(window.location.href,(current_page-1)) + '" onclick="return false; location.reload();">&lt;</a></td>');
+            $("tr").first().html('<td onclick="document.location=this.firstChild.href"><a href="' + getNextPage(window.location.href,previous_page, "&unlpage=") + '" onclick="return false; location.reload();">&lt;</a></td>');
+            $("tr").last().html('<td onclick="document.location=this.firstChild.href"><a href="' + getNextPage(window.location.href,previous_page, "&unlpage=") + '" onclick="return false; location.reload();">&lt;</a></td>');
             for (var j = 0; j < Math.ceil((favs["lists"][current_fav-10]["galleries"].length)/25); j++) {
                 if(j == current_page){
                     $("tr").first().append('<td class="ptds"><a href="' + window.location.href + '" onclick="return false">' + (j+1) + '</a></td>');
                     $("tr").last().append('<td class="ptds"><a href="' + window.location.href + '" onclick="return false">' + (j+1) + '</a></td>');
 
                 }else{
-                    $("tr").first().append('<td onclick="document.location=this.firstChild.href"><a href="' + getNextPage(window.location.href,j) + '" onclick="return false; location.reload();">' + (j+1) + '</a></td>');
-                    $("tr").last().append('<td onclick="document.location=this.firstChild.href"><a href="' + getNextPage(window.location.href,j) + '" onclick="return false; location.reload();">' + (j+1) + '</a></td>');
+                    $("tr").first().append('<td onclick="document.location=this.firstChild.href"><a href="' + getNextPage(window.location.href,j, "&unlpage=") + '" onclick="return false; location.reload();">' + (j+1) + '</a></td>');
+                    $("tr").last().append('<td onclick="document.location=this.firstChild.href"><a href="' + getNextPage(window.location.href,j, "&unlpage=") + '" onclick="return false; location.reload();">' + (j+1) + '</a></td>');
 
                 }
             }
-            var next_page = (parseInt(current_page)+1);
-            if(next_page > Math.ceil((favs["lists"][current_fav-10]["galleries"].length)/25)-1){
-                next_page = Math.ceil((favs["lists"][current_fav-10]["galleries"].length)/25)-1;
-            }
-            $("tr").first().append('<td onclick="document.location=this.firstChild.href"><a href="'+ getNextPage(window.location.href,next_page) + '" onclick="return false; location.reload();">&gt;</a></td>');
-            $("tr").last().append('<td onclick="document.location=this.firstChild.href"><a href="'+ getNextPage(window.location.href,next_page) + '" onclick="return false; location.reload();">&gt;</a></td>');
+            
+            $("tr").first().append('<td onclick="document.location=this.firstChild.href"><a href="'+ getNextPage(window.location.href,next_page, "&unlpage=") + '" onclick="return false; location.reload();">&gt;</a></td>');
+            $("tr").last().append('<td onclick="document.location=this.firstChild.href"><a href="'+ getNextPage(window.location.href,next_page, "&unlpage=") + '" onclick="return false; location.reload();">&gt;</a></td>');
 
         }
         $(".fp.fps").removeClass("fps");
@@ -227,6 +242,7 @@ if(window.location.pathname.includes("favorites.php")) {
         for (var j = (current_page*25)+1; j < display_galleries.length; j++) {
             gidlist += ",[" + display_galleries[j] + "]";
         }
+
         var sadpandaRequest = '{  "method": "gdata",  "gidlist": [' + gidlist +']}';
         var sadpandaInfo;
         var ret = GM_xmlhttpRequest({
@@ -234,19 +250,19 @@ if(window.location.pathname.includes("favorites.php")) {
             data: sadpandaRequest,
             url: "http://g.e-hentai.org/api.php",
             onload: function(res) {
+
                 sadpandaInfo = JSON.parse(res.responseText);
                 script_log(sadpandaInfo);
                 for (var j = (current_page*25); j < favs["lists"][current_fav-10]["galleries"].length; j++) {
                     var rate_offset = [0, 0];
-
                     rate_offset[1] = (80-Math.round(sadpandaInfo["gmetadata"][j-(current_page*25)]["rating"])*16)*-1;
                     if((Math.round(sadpandaInfo["gmetadata"][j-(current_page*25)]["rating"])-Math.floor(sadpandaInfo["gmetadata"][j-(current_page*25)]["rating"]))==0) {
                         rate_offset[0] = -20;
                         rate_offset[1] += 16;
+
                     }
                     var rate_thumb = '<div class="id43 ir" style="background-position:'+rate_offset[1]+'px '+rate_offset[0]+'px; opacity:0.93333333333333; margin-top:2px"></div>';
                     var rate_list = '<div class="ir it4r" style="background-position:'+rate_offset[1]+'px '+rate_offset[0]+'px; opacity:1"></div>';
-
                     if(display == "thumb"){
                         $(".itg").append(`<div class="id1" style="height:335px"><div class="id2"><a href="`+ current_domain + `/g/` + favs["lists"][current_fav-10]["galleries"][j]["gid"]+ `/` + favs["lists"][current_fav-10]["galleries"][j]["gt"]+ `/">` + sadpandaInfo["gmetadata"][j-(current_page*25)]["title"] +`</a></div><div class="id3" style="height:280px"><a href="`+ current_domain + `/g/` + favs["lists"][current_fav-10]["galleries"][j]["gid"]+ `/` + favs["lists"][current_fav-10]["galleries"][j]["gt"]+ `/"><img src="` + sadpandaInfo["gmetadata"][j-(current_page*25)]["thumb"] +`" alt="Free Hentai Doujinshi Gallery ` + sadpandaInfo["gmetadata"][j-(current_page*25)]["title"] + `" title="` + sadpandaInfo["gmetadata"][j-(current_page*25)]["title"] + `" style="position:relative; top:-3px"></a></div><div class="id4"><div class="id41" style="background-position:0 -35px" title="` + sadpandaInfo["gmetadata"][j-(current_page*25)]["category"] + `"></div><div class="id42">26 files</div>`+rate_thumb+`<div class="id44"><div style="float:right"><div onclick="return popUp('`+ current_domain + `/gallerypopups.php?gid=` + favs["lists"][current_fav-10]["galleries"][j]["gid"]+ `&amp;t=` + favs["lists"][current_fav-10]["galleries"][j]["gt"]+ `&amp;act=addfav',675,415)" class="i" id="favicon_` + favs["lists"][current_fav-10]["galleries"][j]["gid"]+ `" style="` + fav_icon + `; cursor:pointer; margin:5px 3px 0" title="` + favs["lists"][current_fav-10]["name"]+ `"></div><input type="checkbox" name="modifygids[]" value="` + favs["lists"][current_fav-10]["galleries"][j]["gid"]+ `" style="position:relative; top:3px; left:-1px"></div></div></div></div>`);
                     }
@@ -438,8 +454,8 @@ $(function(){
     $('.stdbtn.fav').click(function(){
         script_log("yo");
         $(".inp.unlfav:checked").each(function( index ) {
-            console.log( $( this ).val() );
-            console.log( $( this ).attr("token") );
+            script_log( $( this ).val() );
+            script_log( $( this ).attr("token") );
             $( "#stdinput option:selected" ).text();
         });
 
