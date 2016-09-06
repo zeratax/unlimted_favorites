@@ -33,3 +33,8 @@ I noticed that *E-Hentai  Highlighter* stops the script from working, but after 
 - Favorites are saved by local time not server time
 - Using the options on */favorites.php* to resort your favorites to different lists does not work
 - */favorites.php* still looks a bit akward
+
+## Images:
+
+![favorites](https://my.mixtape.moe/kooqqe.png "favorites example")
+![settings](https://my.mixtape.moe/iadttx.png "settings example")
