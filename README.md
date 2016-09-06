@@ -36,5 +36,4 @@ I noticed that *E-Hentai  Highlighter* stops the script from working, but after 
 
 ## Images:
 
-![favorites](https://my.mixtape.moe/kooqqe.png "favorites example")
 ![settings](https://my.mixtape.moe/iadttx.png "settings example")
