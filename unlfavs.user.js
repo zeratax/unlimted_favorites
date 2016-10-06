@@ -560,7 +560,7 @@ $(function(){
 			}
 		}
 		if(selected > 9 && faved_list+10 != selected) {
-			var sadpandaRequest = '{  "method": "gdata",  "gidlist": [[' + current_gid +', "' + current_gt + '" ] ]}';
+			var sadpandaRequest = '{  "method": "gdata",  "gidlist": [[' + current_gid +', "' + current_gt + '" ] ], "namespace": 1}';
 			var sadpandaInfo;
 
 			script_log(sadpandaRequest);
