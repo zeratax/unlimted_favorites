@@ -11,54 +11,32 @@
 // @grant          GM_xmlhttpRequest
 // @require        https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js
 // @require        https://cdnjs.cloudflare.com/ajax/libs/lodash.js/0.10.0/lodash.min.js
-// @version        0.6.3
+// @version        0.6.4
 // ==/UserScript==
 
-function script_log(message) {
-    console.log("[Unlimited Fav]:");
-    console.log(message);
-}
-
-function arrUnique(arr) {
-    var cleaned = [];
-    arr.forEach(function(itm) {
-        var unique = true;
-        cleaned.forEach(function(itm2) {
-            if (_.isEqual(itm, itm2)) unique = false;
-        });
-        if (unique)  cleaned.push(itm);
-        else script_log("duplicate found");
-    });
-    return cleaned;
-}
-
-script_log("script running");
 var favs = {};
 var favsString = GM_getValue ("favsJson",  "");
 if(!favsString){
-	favsString = '{' +
-	'"lists": [' +
-	'{' +
-	'"name": "Favorites 10",' +
-	'"galleries": []' +
-	'}' +
-	'],' +
-	'"display": "thumb",' +
-	'"order": "faved"' +
-	'}';
-	GM_setValue ("favsJson", favsString );
+    favsString = '{' +
+        '"lists": [' +
+        '{' +
+        '"name": "Favorites 10",' +
+        '"galleries": []' +
+        '}' +
+        '],' +
+        '"display": "thumb",' +
+        '"order": "faved"' +
+        '}';
+    GM_setValue ("favsJson", favsString );
 }
 favs = JSON.parse (favsString);
 
 for (var i = 0; i < favs["lists"].length; i++) {
- arr = favs["lists"][i]["galleries"];
- favs["lists"][i]["galleries"] = arrUnique(arr);
- GM_setValue ("favsJson", JSON.stringify(favs) );
+    arr = favs["lists"][i]["galleries"];
+    favs["lists"][i]["galleries"] = arrUnique(arr);
+    GM_setValue ("favsJson", JSON.stringify(favs) );
 }
 
-
-
-//-- DEBUG: List items to console.
 script_log(favs);
 var lists = favs["lists"];
 var last_list_index = [lists.length-1];
@@ -108,11 +86,32 @@ var QueryString = function () {
     }
     return query_string;
 }();
+
+function script_log(message) {
+    console.log("[Unlimited Fav]:");
+    console.log(message);
+}
+
+function arrUnique(arr) {
+    var cleaned = [];
+    arr.forEach(function(itm) {
+        var unique = true;
+        cleaned.forEach(function(itm2) {
+            if (_.isEqual(itm, itm2)) unique = false;
+        });
+        if (unique)  cleaned.push(itm);
+        else script_log("duplicate found");
+    });
+    return cleaned;
+}
+
+
 function isEven(n) {
     return n % 2 == 0;
 }
 
-function getNextPage (url, value, parameter) {
+function addUrlParameter (url, value, parameter) {
+    url = url.replace('#','');
     var param_index = url.indexOf(parameter);
     if(param_index>-1){
         var next_param_index = url.indexOf("&", param_index);
@@ -164,8 +163,13 @@ if( favs["lists"][last_list_index]["galleries"].length > 0){
 */
 
 if(window.location.pathname.includes("/g/")) {
-    current_gid = window.location.pathname.slice(3,9);
-    current_gt = window.location.pathname.slice(10,20);
+    re = /\/g\/(\S+)\/(\S+)\//i;
+    str = window.location.pathname;
+    m = str.match(re);
+    if (m) {
+        current_gid = m[1];
+        current_gt = m[2];
+    }
     script_log(current_gid);
     script_log(current_gt);
     for (var i = 0; i < favs["lists"].length; i++) {
@@ -192,7 +196,7 @@ if(window.location.pathname.includes("favorites.php")) {
     }
     if(current_fav > 9){
         if(page < 9999){
-            window.open(getNextPage(window.location.href,9999, "&page="),"_self");
+            window.open(addUrlParameter(window.location.href,9999, "&page="),"_self");
         }
         if($("div p").text()=="No hits found" && (favs["lists"][current_fav-10]["galleries"].length-(current_page*25))>0){
             visible_galleries = ((current_page*25)+25);
@@ -236,26 +240,26 @@ if(window.location.pathname.includes("favorites.php")) {
             }
             $("table").last().after(`<form name="favform" action="" method="post" style="margin:0"><div style="float:left; width:380px; position:relative; text-align:left"><div style="position:absolute; top:-18px; left:15px">Display: &nbsp;` + option_1 + ` &nbsp; [` + option_2 + `] &nbsp; &nbsp;Order: &nbsp;` + option_3 + ` &nbsp; [` + option_4 + `]</div></div><div style="position:relative; width:100%; clear:both"><div style="float:right; width:300px; position:relative; text-align:right"><div style="position:absolute; top:-30px; left:70px">Action:<select class="stdinput" name="ddact" style="height:21px; margin-left:13px; padding-left:10px; width:170px; background-repeat:no-repeat; background-image:url(`+image_domain+`/fav.png); background-position:4px 20px" onchange="update_favsel(this)"><option value="delete" selected="selected" style="height:17px; padding-left:10px; padding-top:4px">Remove from Favorites</option><optgroup label="Change Favorite Category" style="padding:3px 5px 5px 5px"><option style="height:15px; padding-left:20px; padding-top:4px; background-image:url(`+image_domain+`/fav.png); background-repeat:no-repeat; background-position:2px 1px" value="fav0">good stuff</option><option style="height:15px; padding-left:20px; padding-top:4px; background-image:url(`+image_domain+`/fav.png); background-repeat:no-repeat; background-position:2px -18px" value="fav1">absolute best</option><option style="height:15px; padding-left:20px; padding-top:4px; background-image:url(` + image_domain + `/fav.png); background-repeat:no-repeat; background-position:2px -37px" value="fav2">Favorites 2</option><option style="height:15px; padding-left:20px; padding-top:4px; background-image:url(`+image_domain+`/fav.png); background-repeat:no-repeat; background-position:2px -56px" value="fav3">Favorites 3</option><option style="height:15px; padding-left:20px; padding-top:4px; background-image:url(`+image_domain+`/fav.png); background-repeat:no-repeat; background-position:2px -75px" value="fav4">Favorites 4</option><option style="height:15px; padding-left:20px; padding-top:4px; background-image:url(`+image_domain+`/fav.png); background-repeat:no-repeat; background-position:2px -94px" value="fav5">Favorites 5</option><option style="height:15px; padding-left:20px; padding-top:4px; background-image:url(`+image_domain+`/fav.png); background-repeat:no-repeat; background-position:2px -113px" value="fav6">Favorites 6</option><option style="height:15px; padding-left:20px; padding-top:4px; background-image:url(`+image_domain+`/fav.png); background-repeat:no-repeat; background-position:2px -132px" value="fav7">Favorites 7</option><option style="height:15px; padding-left:20px; padding-top:4px; background-image:url(`+image_domain+`/fav.png); background-repeat:no-repeat; background-position:2px -151px" value="fav8">Favorites 8</option><option style="height:15px; padding-left:20px; padding-top:4px; background-image:url(`+ image_domain + `/fav.png); background-repeat:no-repeat; background-position:2px -170px" value="fav9">Favorites 9</option>` + fav_options+ `</optgroup></select></div></div><div style="clear:both"></div></div><div class="itg"><div class="c"></div></div><table class="ptb" style="margin:0px auto 10px"><tbody><tr><td class="ptdd">&lt;</td><td class="ptds"><a href="` + current_domain + `/favorites.php?favcat=` + current_fav + `" onclick="return false">1</a></td><td class="ptdd">&gt;</td></tr></tbody></table><div style="position:relative; width:100%; clear:both"><div style="float:right; width:100px; position:relative"><div style="position:absolute; top:-28px; left:43px"><input type="button" name="apply" value="Apply" class="stdbtn fav"></div></div><div style="clear:both"></div></div></form>`);
             if(display == "list"){
-                $(".itg").append(`<tbody><tr><th style="width:92px">&nbsp;</th><th style="width:89px">` + option_5 + `</th><th style="min-width:610px">Name</th><th style="width:89px">` + option_6 + `</th><th style="width:34px; text-align:center"><input id="alltoggle" type="checkbox" onclick="toggle_all()"></th></tr></tbody>`);  
+                $(".itg").append(`<tbody><tr><th style="width:92px">&nbsp;</th><th style="width:89px">` + option_5 + `</th><th style="min-width:610px">Name</th><th style="width:89px">` + option_6 + `</th><th style="width:34px; text-align:center"><input id="alltoggle" type="checkbox" onclick="toggle_all()"></th></tr></tbody>`);
             }
         }
 
         if(favs["lists"][current_fav-10]["galleries"].length > 25){
-            $("tr").first().html('<td onclick="document.location=this.firstChild.href"><a href="' + getNextPage(window.location.href,previous_page, "&unlpage=") + '" onclick="return false; location.reload();">&lt;</a></td>');
-            $("tr").last().html('<td onclick="document.location=this.firstChild.href"><a href="' + getNextPage(window.location.href,previous_page, "&unlpage=") + '" onclick="return false; location.reload();">&lt;</a></td>');
+            $("tr").first().html('<td onclick="document.location=this.firstChild.href"><a href="' + addUrlParameter(window.location.href,previous_page, "&unlpage=") + '" onclick="return false; location.reload();">&lt;</a></td>');
+            $("tr").last().html('<td onclick="document.location=this.firstChild.href"><a href="' + addUrlParameter(window.location.href,previous_page, "&unlpage=") + '" onclick="return false; location.reload();">&lt;</a></td>');
             for (var j = 0; j < Math.ceil((favs["lists"][current_fav-10]["galleries"].length)/25); j++) {
                 if(j == current_page){
                     $("tr").first().append('<td class="ptds"><a href="' + window.location.href + '" onclick="return false">' + (j+1) + '</a></td>');
                     $("tr").last().append('<td class="ptds"><a href="' + window.location.href + '" onclick="return false">' + (j+1) + '</a></td>');
 
                 }else{
-                    $("tr").first().append('<td onclick="document.location=this.firstChild.href"><a href="' + getNextPage(window.location.href,j, "&unlpage=") + '" onclick="return false; location.reload();">' + (j+1) + '</a></td>');
-                    $("tr").last().append('<td onclick="document.location=this.firstChild.href"><a href="' + getNextPage(window.location.href,j, "&unlpage=") + '" onclick="return false; location.reload();">' + (j+1) + '</a></td>');
+                    $("tr").first().append('<td onclick="document.location=this.firstChild.href"><a href="' + addUrlParameter(window.location.href,j, "&unlpage=") + '" onclick="return false; location.reload();">' + (j+1) + '</a></td>');
+                    $("tr").last().append('<td onclick="document.location=this.firstChild.href"><a href="' + addUrlParameter(window.location.href,j, "&unlpage=") + '" onclick="return false; location.reload();">' + (j+1) + '</a></td>');
 
                 }
             }
-            $("tr").first().append('<td onclick="document.location=this.firstChild.href"><a href="'+ getNextPage(window.location.href,next_page, "&unlpage=") + '" onclick="return false; location.reload();">&gt;</a></td>');
-            $("tr").last().append('<td onclick="document.location=this.firstChild.href"><a href="'+ getNextPage(window.location.href,next_page, "&unlpage=") + '" onclick="return false; location.reload();">&gt;</a></td>');
+            $("tr").first().append('<td onclick="document.location=this.firstChild.href"><a href="'+ addUrlParameter(window.location.href,next_page, "&unlpage=") + '" onclick="return false; location.reload();">&gt;</a></td>');
+            $("tr").last().append('<td onclick="document.location=this.firstChild.href"><a href="'+ addUrlParameter(window.location.href,next_page, "&unlpage=") + '" onclick="return false; location.reload();">&gt;</a></td>');
 
         }
         $(".fp.fps").removeClass("fps");
