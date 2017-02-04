@@ -2,9 +2,7 @@
 // @name           unlimited favs
 // @namespace      zeratax@firemail.cc
 // @description    Adds unlimited local favorite lists to sadpanda
-// @updateURL      https://openuserjs.org/meta/ZerataX/unlimited_favs.meta.js
-// @downloadURL    https://openuserjs.org/install/ZerataX/unlimited_favs.user.js
-// @include        http://g.e-hentai.org/*
+// @include        https://e-hentai.org/*
 // @include        https://g.e-hentai.org/*
 // @include        http://exhentai.org/*
 // @include        https://exhentai.org/*
@@ -13,7 +11,7 @@
 // @grant          GM_xmlhttpRequest
 // @require        https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js
 // @require        https://cdnjs.cloudflare.com/ajax/libs/lodash.js/0.10.0/lodash.min.js
-// @version        0.6.2
+// @version        0.6.3
 // ==/UserScript==
 
 function script_log(message) {
@@ -278,7 +276,7 @@ if(window.location.pathname.includes("favorites.php")) {
         var ret = GM_xmlhttpRequest({
             method: "POST",
             data: sadpandaRequest,
-            url: "http://g.e-hentai.org/api.php",
+            url: "https://e-hentai.org/api.php",
             onload: function(res) {
 
                 sadpandaInfo = JSON.parse(res.responseText);
@@ -381,16 +379,16 @@ if(!window.location.pathname.includes("/g/") && !window.location.pathname.includ
             if($("#dmi").find("a").text() == "Show Thumbnails") {
                 script_log($('a[href="' + current_domain + '/g/' + favs["lists"][i]["galleries"][j]["gid"] + '/' + favs["lists"][i]["galleries"][j]["gt"] + '/' +'"]').length);
                 if($('a[href="' + current_domain + '/g/' + favs["lists"][i]["galleries"][j]["gid"] + '/' + favs["lists"][i]["galleries"][j]["gt"] + '/' +'"]').length){
-                    $('a[href="' + current_domain + '/g/' + favs["lists"][i]["galleries"][j]["gid"] + '/' + favs["lists"][i]["galleries"][j]["gt"] + '/' +'"]').first().parent().parent().find(".it3").append(`<div onclick="return popUp('http://g.e-hentai.org/gallerypopups.php?gid=` + favs["lists"][i]["galleries"][j]["gid"] + `&amp;t=` + favs["lists"][i]["galleries"][j]["gt"] + `&amp;act=addfav',675,415)" class="i" id="favicon_`+ favs["lists"][i]["galleries"][j]["gid"] +`" style="` + fav_icon + `; cursor:pointer;" title="` + favs["lists"][i]["name"] + `"></div>`);
+                    $('a[href="' + current_domain + '/g/' + favs["lists"][i]["galleries"][j]["gid"] + '/' + favs["lists"][i]["galleries"][j]["gt"] + '/' +'"]').first().parent().parent().find(".it3").append(`<div onclick="return popUp('https://e-hentai.org/gallerypopups.php?gid=` + favs["lists"][i]["galleries"][j]["gid"] + `&amp;t=` + favs["lists"][i]["galleries"][j]["gt"] + `&amp;act=addfav',675,415)" class="i" id="favicon_`+ favs["lists"][i]["galleries"][j]["gid"] +`" style="` + fav_icon + `; cursor:pointer;" title="` + favs["lists"][i]["name"] + `"></div>`);
                 }else{
 
-                    $('div:contains("' + thumb + '")').last().parent().parent().find(".it3").append(`<div onclick="return popUp('http://g.e-hentai.org/gallerypopups.php?gid=` + favs["lists"][i]["galleries"][j]["gid"] + `&amp;t=` + favs["lists"][i]["galleries"][j]["gt"] + `&amp;act=addfav',675,415)" class="i" id="favicon_`+ favs["lists"][i]["galleries"][j]["gid"] +`" style="` + fav_icon + `; cursor:pointer;" title="` + favs["lists"][i]["name"] + `"></div>`);
+                    $('div:contains("' + thumb + '")').last().parent().parent().find(".it3").append(`<div onclick="return popUp('https://e-hentai.org/gallerypopups.php?gid=` + favs["lists"][i]["galleries"][j]["gid"] + `&amp;t=` + favs["lists"][i]["galleries"][j]["gt"] + `&amp;act=addfav',675,415)" class="i" id="favicon_`+ favs["lists"][i]["galleries"][j]["gid"] +`" style="` + fav_icon + `; cursor:pointer;" title="` + favs["lists"][i]["name"] + `"></div>`);
                 }
             }else{
                 if($('a[href="' + current_domain + '/g/' + favs["lists"][i]["galleries"][j]["gid"] + '/' + favs["lists"][i]["galleries"][j]["gt"] + '/' +'"]').length){
-                    $('a[href="' + current_domain + '/g/' + favs["lists"][i]["galleries"][j]["gid"] + '/' + favs["lists"][i]["galleries"][j]["gt"] + '/' +'"]').first().parent().parent().find(".id44").children().first().append(`<div onclick="return popUp('http://g.e-hentai.org/gallerypopups.php?gid=` + favs["lists"][i]["galleries"][j]["gid"] + `&amp;t=` + favs["lists"][i]["galleries"][j]["gt"] + `&amp;act=addfav',675,415)" class="i" id="favicon_`+ favs["lists"][i]["galleries"][j]["gid"] +`" style="` + fav_icon + `; cursor:pointer;  margin:5px 3px 0" title="` + favs["lists"][i]["name"] + `"></div>`);
+                    $('a[href="' + current_domain + '/g/' + favs["lists"][i]["galleries"][j]["gid"] + '/' + favs["lists"][i]["galleries"][j]["gt"] + '/' +'"]').first().parent().parent().find(".id44").children().first().append(`<div onclick="return popUp('https://e-hentai.org/gallerypopups.php?gid=` + favs["lists"][i]["galleries"][j]["gid"] + `&amp;t=` + favs["lists"][i]["galleries"][j]["gt"] + `&amp;act=addfav',675,415)" class="i" id="favicon_`+ favs["lists"][i]["galleries"][j]["gid"] +`" style="` + fav_icon + `; cursor:pointer;  margin:5px 3px 0" title="` + favs["lists"][i]["name"] + `"></div>`);
                 }else{
-                    $('img[src*="'+ thumb +'"]').first().parent().parent().parent().find(".id44").children().first().append(`<div onclick="return popUp('http://g.e-hentai.org/gallerypopups.php?gid=` + favs["lists"][i]["galleries"][j]["gid"] + `&amp;t=` + favs["lists"][i]["galleries"][j]["gt"] + `&amp;act=addfav',675,415)" class="i" id="favicon_`+ favs["lists"][i]["galleries"][j]["gid"] +`" style="` + fav_icon + `; cursor:pointer;  margin:5px 3px 0" title="` + favs["lists"][i]["name"] + `"></div>`);
+                    $('img[src*="'+ thumb +'"]').first().parent().parent().parent().find(".id44").children().first().append(`<div onclick="return popUp('https://e-hentai.org/gallerypopups.php?gid=` + favs["lists"][i]["galleries"][j]["gid"] + `&amp;t=` + favs["lists"][i]["galleries"][j]["gt"] + `&amp;act=addfav',675,415)" class="i" id="favicon_`+ favs["lists"][i]["galleries"][j]["gid"] +`" style="` + fav_icon + `; cursor:pointer;  margin:5px 3px 0" title="` + favs["lists"][i]["name"] + `"></div>`);
                 }
             }
         }
@@ -576,7 +574,7 @@ $(function(){
             var ret = GM_xmlhttpRequest({
                 method: "POST",
                 data: sadpandaRequest,
-                url: "http://g.e-hentai.org/api.php",
+                url: "https://e-hentai.org/api.php",
                 onload: function(res) {
                     sadpandaInfo = JSON.parse(res.responseText);
                     script_log(sadpandaInfo);
