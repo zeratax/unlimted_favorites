@@ -2,6 +2,7 @@
 // @name           unlimited favs
 // @namespace      zeratax@firemail.cc
 // @description    Adds unlimited local favorite lists to sadpanda
+// @license        GPL-3.0
 // @include        https://e-hentai.org/*
 // @include        https://g.e-hentai.org/*
 // @include        http://exhentai.org/*
