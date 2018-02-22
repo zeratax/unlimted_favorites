@@ -12,7 +12,7 @@
 // @grant          GM_xmlhttpRequest
 // @require        https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js
 // @require        https://cdnjs.cloudflare.com/ajax/libs/lodash.js/0.10.0/lodash.min.js
-// @version        0.6.4
+// @version        0.6.5
 // ==/UserScript==
 
 var favs = {};
@@ -429,6 +429,7 @@ if(window.location.pathname.includes("gallerypopups.php")) {
     $("#galpop").attr("id","disabledpost");
     $(".stdbtn").attr('type', 'button');
     $(".stdbtn").addClass("sel");
+    $( "input[name='apply']" ).attr('type', 'button');
     for (var i = 0; i < favs["lists"].length; i++) {
         script_log("appending favorite tab " + favs["lists"][i]["name"]);
         $(".nosel").append(' <div style="height:25px; cursor:pointer"> ' +
@@ -556,7 +557,7 @@ $(function(){
             last_list_index = [lists.length-1];
         }
     });
-    $('.stdbtn.sel').click(function(){
+    $( "input[name='apply']" ).click(function(){
         if(faved_list+10) {
 
             if(faved_list+10 != selected) {
