@@ -1,7 +1,6 @@
 // ==UserScript==
 // @name           dev unlimited favs
 // @namespace      mail@zera.tax
-// @updateURL      https://openuserjs.org/meta/ZerataX/unlimited_favs.meta.js
 // @description    Adds unlimited local favorite lists to sadpanda
 // @license        GPL-3.0
 // @include        /^https://e(x|-)hentai\.org/.*$/
@@ -293,6 +292,14 @@ $(function() {
         return array.filter(e => e !== element);
     }
 
+    function download(text, name, type) {
+        let a = document.createElement("a");
+        let file = new Blob([text], {type: type});
+        a.href = URL.createObjectURL(file);
+        a.download = name;
+        a.click();
+    }
+
     // based on: https://stackoverflow.com/a/6078873
     function timeConverter(UNIX_timestamp) {
         let months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -352,7 +359,7 @@ $(function() {
             input.val(name);
             input.addClass("ulf " + type);
 
-            selection.find(".i").css({"filter": "invert(100%) hue-rotate(" + id * 42 + "deg)"});
+            selection.find(".i").css({"filter": "invert(100%) hue-rotate(" + id * 35 + "deg)"});
             selection.appendTo(favsel);
         }
 
@@ -369,18 +376,37 @@ $(function() {
             button_template.children().first().prop("type", "button");
             button_template.addClass("ulf");
 
-            let btn_import = button_template.clone();
-            let btninp_import = btn_import.children().first();
-            let btn_export = button_template.clone();
-            let btninp_export = btn_export.children().first();
+            let btn_port = button_template.clone();
+            let btnfile_import = btn_port.children().first();
 
-            btninp_import.attr('name', "ufl_import");
+            let btninp_import = btnfile_import.clone();
+            let btninp_export = btnfile_import.clone();
+
+            btn_port.css({"margin": "8px auto 10px 130px"});
+
+            btninp_import.css({"padding": "2px 33px 2px", "margin": 0});
+            btninp_export.css({"padding": "2px 33px 2px", "margin": 0});
+
+            btninp_import.attr('name', "ulf_import");
             btninp_import.val("import favs");
-            btninp_export.attr('name', "ufl_export");
-            btninp_export.val("export favs");
+            btninp_import.prop("type", "button");
+            btninp_import.attr("for","ulf_import_json");
 
-            btn_import.appendTo(favsel.parent());
-            btn_export.appendTo(favsel.parent());
+
+            btnfile_import.prop("type", "file");
+            btnfile_import.prop("accept", ".json,application/json");
+            btnfile_import.attr("id","ulf_import_json");
+
+            btninp_export.attr('name', "ulf_export");
+            btninp_export.val("export favs");
+            btninp_export.prop("type", "button");
+
+            //btn_port.appendTo(favsel.parent());
+            favsel.parent().after(btn_port);
+            btninp_import.appendTo(btn_port);
+            btninp_export.appendTo(btn_port);
+            btn_port.append("<br>");
+            btnfile_import.appendTo(btn_port);
         }
 
         // BUTTON FUNCTIONS
@@ -426,6 +452,41 @@ $(function() {
             elem.removeClass("newlist");
             elem.addClass("rename");
             newInput("new list", _ULF.lists.length, "newlist");
+        });
+        $(document).on('click', '.ulf>input[name="ulf_export"]', function() {
+            let file_name = 'unl_favs_' + new Date().toISOString() + '.json';
+            download(JSON.stringify(_ULFjson), file_name, 'text/json');
+        });
+        let import_string = "";
+
+        $(document).on('click', '.ulf>input[name="ulf_import"]', function() {
+            if(!import_string) {
+                alert("no file selected!");
+                return;
+            }
+            try{
+                _ULFjson = load_gm(import_string);
+            } catch(err) {
+                alert("no valid json supplied");
+                return;
+            }
+            save_gm();
+            location.reload();
+        });
+        $('#ulf_import_json').change(function (){
+            let input = this;
+
+            var reader = new FileReader();
+            reader.onload = function(){
+                try{
+                    import_string = reader.result;
+                    console.log(JSON.parse(import_string));
+                } catch(err) {
+                    alert("no valid json supplied");
+                    return;
+                }
+            };
+            reader.readAsText(input.files[0]);
         });
     }
 });
