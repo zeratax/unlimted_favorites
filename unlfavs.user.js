@@ -8,7 +8,7 @@
 // @grant          GM_setValue
 // @grant          GM_xmlhttpRequest
 // @require        https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.js
-// @version        0.7
+// @version        0.7.1
 // ==/UserScript==
 
 
@@ -29,7 +29,7 @@ $(function() {
             this._lists = lists;
         }
 
-        get lists()         { return this._lists; }
+        get lists() { return this._lists; }
 
         newList(name=false, galleries=[]) {
             let index = this._lists.length;
@@ -49,7 +49,7 @@ $(function() {
         removeList(list) {
             let index = this._lists.indexOf(list);
             if(index == -1) {
-                Error('this list does not exist');
+                RangeError('this list does not exist');
                 return;
             }
 
@@ -83,7 +83,7 @@ $(function() {
             this._galleries = galleries;
         }
 
-        get name()      { return this._name; }
+        get name() { return this._name; }
         set name(name)  {
             this._name = name;
             _ULFjson.lists[this._id].name = name;
@@ -91,18 +91,23 @@ $(function() {
         }
 
         galleries(order="faved", search=false) {
+            if (order == "faved") {
+                result = this._galleries.sort(function(a, b) {
+                    return new Date(b.date) - new Date(a.date);
+                });
+            } else if(order == "posted") {
+                result = this._galleries.sort(function(a, b) {
+                    // unix to date: new Date(UNIX_timestamp * 1000);
+                    return new Date(b.info.posted * 1000) - new Date(a.info.posted * 1000);
+                });
+            } else {
+                SyntaxError('"order" has to be either "posted" or "faved"');
+                return;
+            }
             if (search) {
                 //
-            } else {
-                if (order == "faved") {
-                    return this._galleries;
-                } else if(order == "posted") {
-                    return this._galleries.sort(function(a, b) {
-                        // unix to date: new Date(UNIX_timestamp * 1000);
-                        return new Date(b.info.posted * 1000) - new Date(a.info.posted * 1000);
-                    });
-                }
             }
+            return result;
         }
 
         addGallery(id, token, note) {
@@ -124,7 +129,7 @@ $(function() {
                     this._galleries.push(gallery);
                 } catch (err) {
                     console.log(err);
-                    Error('could not get gallery info!');
+                    InternalError('could not get gallery info!');
                     return;
                 }
             } else {
@@ -143,7 +148,7 @@ $(function() {
             if (gallery) {
                 this._galleries = remove(galleries, gallery);
             } else {
-                Error('gallery is not in this list!');
+                RangeError('gallery is not in this list!');
                 return;
             }
             _ULFjson.lists[this._id].galleries = remove(_ULFjson.lists[this._id].galleries, gallery);
@@ -163,23 +168,27 @@ $(function() {
     }
 
     // USERSCRIPT SPECIFIC
+    // load persistently saved settings, or from a given json string
     function load_gm(import_string=false) {
         let gm_string = "";
 
         if (import_string) {
+            // check if string is a valid json string
             try {
                 JSON.parse(import_string);
                 gm_string = import_string;
             } catch (err) {
                 console.log(err);
-                Error('not a valid json supplied');
+                TypeError('not a valid json supplied');
                 return;
             }
 
         } else {
+            // get value from greasemonkey/tampermonkey etc.
             gm_string = GM_getValue("favsJson", "");
         }
 
+        // if string is neither in GM nor given create default string
         if (!gm_string) {
             gm_string = '{' +
                 '"lists": [' +
@@ -197,6 +206,7 @@ $(function() {
 
         let gm_json = JSON.parse(gm_string);
 
+        // VERSION ADJUSTMENTS
         if(versionCompare(String(gm_json.version), "0.7.0") == -1) {
             // fix saved jsons from < 0.7.0 versions
             // id from string to int
@@ -213,7 +223,9 @@ $(function() {
         return gm_json;
     }
 
+    // save settings persistently
     function save_gm() {
+        // save value to greasemonkey/tampermonkey etc.
         GM_setValue("favsJson", JSON.stringify(_ULFjson));
     }
 
@@ -255,7 +267,7 @@ $(function() {
             }
 
             url = url.split('');
-            url.splice((param_index+parameter.length), (next_param_index), value);
+            url.splice((param_index+parameter.length), next_param_index, value);
             url = url.join('');
         }else{
             url += parameter + value;
@@ -292,6 +304,7 @@ $(function() {
         return array.filter(e => e !== element);
     }
 
+    // download file to local storage
     function download(text, name, type) {
         let a = document.createElement("a");
         let file = new Blob([text], {type: type});
@@ -350,6 +363,7 @@ $(function() {
 
         favsel.prev().append( "<br>Rename the last list to create a new one.<br>Click outside the text inputs to save!" );
 
+        // create list name input for rename/new list
         function newInput(name, id, type) {
             let selection = selection_template.clone();
             let input = selection.children().last().children().last();
@@ -410,6 +424,7 @@ $(function() {
         }
 
         // BUTTON FUNCTIONS
+        // rename list
         $(document).on('focusout', '.ulf.rename', function() {
             let elem = this;
             let id = elem.getAttribute('_id');
@@ -418,9 +433,10 @@ $(function() {
                 console.log("deleting list " + id + "...");
                 try {
                     if(_ULF.lists[id].galleries().length != 0){
-                        alert("gallery not empty");
+                        let response = confirm("This list contains still contains galleries, delete anyways?");
+                        if (!response) { return; }
+                        _ULF.removeList(_ULF.lists[id]);
                     }
-                    _ULF.removeList(_ULF.lists[id]);
                 } catch(err) {
                     console.log(err);
                     alert("could not delete gallery");
@@ -443,6 +459,7 @@ $(function() {
             }
         });
 
+        // add new list
         $(document).on('input', '.ulf.newlist', function() {
             let elem = $(this);
             let id = elem.attr('_id');
@@ -453,12 +470,15 @@ $(function() {
             elem.addClass("rename");
             newInput("new list", _ULF.lists.length, "newlist");
         });
+
+        // export favorites
         $(document).on('click', '.ulf>input[name="ulf_export"]', function() {
             let file_name = 'unl_favs_' + new Date().toISOString() + '.json';
             download(JSON.stringify(_ULFjson), file_name, 'text/json');
         });
-        let import_string = "";
 
+        // import favorites
+        let import_string = "";
         $(document).on('click', '.ulf>input[name="ulf_import"]', function() {
             if(!import_string) {
                 alert("no file selected!");
