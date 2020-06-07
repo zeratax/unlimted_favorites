@@ -793,6 +793,8 @@
       // remove search button
       searchButton.remove()
 
+      // TODO: disable search enter
+
       // change use posted/favorited order links
       const orderLink = sorter.querySelector('a')
       orderLink.href = '#'
@@ -854,6 +856,10 @@
           if (page === 0) {
             pageSelection.appendChild(parser('<td class="ptdd">&lt;</td>'))
           } else {
+            // if out of bounds
+            if ((page - 1) * count > number) {
+              console.error('out of bounds')
+            }
             const pageElement = pageTemplate.cloneNode(true)
             pageElement.querySelector('a').innerHTML = '<'
             pageElement.querySelector('a').href = `/favorites.php?page=1&favcat=0&lid=${lid}&ulfpage=${page - 1}#${string}`
@@ -905,6 +911,7 @@
               'Minimal, Minimal+, Compact, Extended, Thumbnail')
         }
       }
+      // save search in hash / reapply search from hash
       if (window.location.hash) {
         const hash = decodeURIComponent(window.location.hash.slice(1))
         searchBox.value = hash
@@ -912,13 +919,15 @@
       } else {
         insertGalleries()
       }
+
+      // start a search when changing text input or categories
       searchBox.oninput = () => insertGalleries(searchBox.value)
       nameCheck.onclick = () => insertGalleries(searchBox.value)
       tagsCheck.onclick = () => insertGalleries(searchBox.value)
       noteCheck.onclick = () => insertGalleries(searchBox.value)
     }
 
-    // include favorite list items
+    // insert favorite list items
     const end = parent.children[10]
     _ULF.dict.lists.forEach(list => {
       parent.insertBefore(newItem(list, template, lid === list.id, mode.value), end)
@@ -928,9 +937,8 @@
   if (window.location.pathname.includes('/g/')) {
     const gid = window.location.pathname.split('/')[2]
     const list = _ULF.dict.getListByGid(gid)
+    // add favorite icon if gallery is in list
     if (list) {
-      console.debug('test')
-
       const offset = _ULF.dict._lists.indexOf(list)
       const favBtn = select('#gdf')
 
@@ -1032,10 +1040,8 @@
                   if (slice.length) {
                     getGalleryInfo(slice).then(entries => {
                       entries.forEach(info => {
-                        if (counter < counterMax) {
-                          counter++
-                          list.getGallery(info.gid).info = info
-                        }
+                        counter++
+                        list.getGallery(info.gid).info = info
                       })
                     })
                   }
@@ -1045,11 +1051,12 @@
           })
           await Promise.eachLimit(promises, parallel, 500).then(() => {
             _ULF.dict.save()
-            window.alert(`updated ${counter} galleries!`)
+            window.alert(`updated ${counterMax} galleries!`)
           })
         }
       }
 
+      // insert all buttons
       const importBox = parser('<div id="ulf_import_box"></div>')
       importBox.append(btnFakeFileImport)
       importBox.append(btnFileImport)
@@ -1131,6 +1138,7 @@
         reject('do nothing') // eslint-disable-line prefer-promise-reject-errors
       })
 
+      // after adding gallery to list submit form
       addULF.then(response => {
         console.debug(response)
         form.submit()
