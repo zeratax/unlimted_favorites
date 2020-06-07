@@ -2,12 +2,13 @@
 
 # Unlimted Favorites
 
-creates locally stored favorite lists for sadpanda
+creates additional locally stored favorite lists for sadpanda
 
 ## Features
 
 - unlimited favorite lists
-- unlimited notes (not the 10 standard favorites lists)
+- unlimited notes (excluding 10 default favorites lists)
+- search through ulf lists
 - export/import your lists
 - works with both domains
 
@@ -15,24 +16,17 @@ creates locally stored favorite lists for sadpanda
 
 Install from https://openuserjs.org/scripts/ZerataX/unlimited_favs
 
-Requires either **Greasemonkey** or *preferably* **Tampermonkey**
+Works best with **Tampermonkey**
 
-### Firefox
+- [Firefox](https://addons.mozilla.org/us/firefox/addon/tampermonkey/)
+- [Chrome](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
 
-- [Tampermonkey](https://addons.mozilla.org/de/firefox/addon/tampermonkey/)
-
-- [Greasemonkey](https://addons.mozilla.org/de/firefox/addon/greasemonkey/)
-
-### Chrome
-
-- [Tampermonkey](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo?hl=de)
-
-## Troubleshooting
-
-## Bugs
+## Known Issues
 
 - If a gallery gets updated the new instance will not be favorited
 - *Show All Favorites* does not show unlimited_favorites
+- no tag highlighting on `/favorites.php`
+- non standard thumbnail sizes are not displayed properly
 
 ## Images
 

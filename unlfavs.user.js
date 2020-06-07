@@ -1,7 +1,11 @@
 // ==UserScript==
 // @name           dev unlimited favs
 // @namespace      mail@zera.tax
+// @author         ZerataX
 // @description    Adds unlimited local favorite lists to sadpanda
+// @homepage       https://github.com/ZerataX/unlimted_favorites/
+// @homepageURL    https://github.com/ZerataX/unlimted_favorites/
+// @supportURL     https://github.com/ZerataX/unlimted_favorites/issues/
 // @license        UNLICENSE
 // @include        /^https://e(x|-)hentai\.org/.*$/
 // @grant          GM_getValue
@@ -97,13 +101,7 @@
         const tagsRE = /-?(?:([a-zA-Z]):)?(".+?\$?"|-?[\w*%?]+)/g
 
         let match
-        let safetycounter = 0
         while (match = tagsRE.exec(search.text)) { // eslint-disable-line no-cond-assign
-          if (safetycounter > 1000) {
-            console.error('safety break')
-            break
-          }
-          safetycounter++
           const [str, category, tag] = match
           let include = (str[0] !== '-')
           let restring = tag
@@ -112,7 +110,7 @@
             .replace(/\?/g, '.')
             .replace(/_/g, '.')
             .replace(/\*/g, '.*?')
-            .replace(/%/g, '.*?'), 'i')
+            .replace(/%/g, '.*?'), 'gi')
 
           switch (category) {
             case 'f':
@@ -131,7 +129,7 @@
               tags['group'].push({ include, regex })
               break
             case 'l':
-              tags['lang'].push({ include, regex })
+              tags['language'].push({ include, regex })
               break
             case 'm':
               tags['male'].push({ include, regex })
@@ -162,16 +160,17 @@
               continue
             }
             tags[category].some(tag => {
+              let searchString = string
               if (category !== 'misc') {
                 if (string.includes(`${category}:`)) {
-                  string = string.replace(`${category}:`, '')
+                  searchString = searchString.replace(`${category}:`, '')
                 } else {
                   // string is not in correct category, skip
                   return false
                 }
               }
 
-              if (tag.regex.test(string)) {
+              if (tag.regex.test(searchString)) {
                 if (tag.include) {
                   // string matches included tag, possibly include
                   status = 'include'
@@ -202,7 +201,6 @@
             }
           }
           if (search.name) {
-            console.debug(matcher(gallery.info.title, true))
             if ((gallery.info.title && matcher(gallery.info.title, true) === 'include') ||
               (gallery.info.title_jpn && matcher(gallery.info.title_jpn, true) === 'include')) {
               show = true
@@ -214,24 +212,17 @@
 
         // now check for excludes
         galleries = galleries.filter(gallery => {
-          let show = true
           if (search.tags) {
-            if (gallery.info.tags.some(tag => matcher(tag) === 'exclude')) {
-              show = false
-            }
+            return !(gallery.info.tags.some(tag => matcher(tag) === 'exclude'))
           }
           if (search.notes) {
-            if (matcher(gallery.note, true) === 'exclude') {
-              show = false
-            }
+            return !(matcher(gallery.note, true) === 'exclude')
           }
           if (search.name) {
-            if ((gallery.info.title && matcher(gallery.info.title, true) === 'exclude') ||
-              (gallery.info.title_jpn && matcher(gallery.info.title_jpn, true) === 'exclude')) {
-              show = true
-            }
+            return !((gallery.info.title && matcher(gallery.info.title, true) === 'exclude') ||
+              (gallery.info.title_jpn && matcher(gallery.info.title_jpn, true) === 'exclude'))
           }
-          return show
+          return true
         })
         console.debug(`galleries after exclude: ${galleries.length}`)
 
@@ -375,7 +366,7 @@
     // set default if no import and no saved version
     const GMJSON = (GMString && GMString !== '{}') ? JSON.parse(GMString) : {
       lists: [{
-        name: 'Favorites 10',
+        name: 'Favorites 11',
         id: '_' + Math.random().toString(36).substr(2, 9),
         galleries: []
       }],
