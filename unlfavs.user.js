@@ -112,65 +112,63 @@
             .replace(/\*/g, '.*?')
             .replace(/%/g, '.*?'), 'gi')
 
-          console.debug(namespace)
-
           switch (namespace) {
             case 'artist':
-              tags['artist'].push({ include, regex })
+              tags['artist'].push({ include, regex, 'used': false })
               break
             case 'f':
-              tags['female'].push({ include, regex })
+              tags['female'].push({ include, regex, 'used': false })
               break
             case 'female':
-              tags['female'].push({ include, regex })
+              tags['female'].push({ include, regex, 'used': false })
               break
             case 'c':
-              tags['character'].push({ include, regex })
+              tags['character'].push({ include, regex, 'used': false })
               break
             case 'character':
-              tags['character'].push({ include, regex })
+              tags['character'].push({ include, regex, 'used': false })
               break
             case 'g':
-              tags['group'].push({ include, regex })
+              tags['group'].push({ include, regex, 'used': false })
               break
             case 'group':
-              tags['group'].push({ include, regex })
+              tags['group'].push({ include, regex, 'used': false })
               break
             case 'circle':
-              tags['group'].push({ include, regex })
+              tags['group'].push({ include, regex, 'used': false })
               break
             case 'creator':
-              tags['group'].push({ include, regex })
+              tags['group'].push({ include, regex, 'used': false })
               break
             case 'l':
-              tags['language'].push({ include, regex })
+              tags['language'].push({ include, regex, 'used': false })
               break
             case 'language':
-              tags['language'].push({ include, regex })
+              tags['language'].push({ include, regex, 'used': false })
               break
             case 'm':
-              tags['male'].push({ include, regex })
+              tags['male'].push({ include, regex, 'used': false })
               break
             case 'male':
-              tags['male'].push({ include, regex })
+              tags['male'].push({ include, regex, 'used': false })
               break
             case 'p':
-              tags['parody'].push({ include, regex })
+              tags['parody'].push({ include, regex, 'used': false })
               break
             case 'parody':
-              tags['parody'].push({ include, regex })
+              tags['parody'].push({ include, regex, 'used': false })
               break
             case 'series':
-              tags['parody'].push({ include, regex })
+              tags['parody'].push({ include, regex, 'used': false })
               break
             case 'r':
-              tags['reclass'].push({ include, regex })
+              tags['reclass'].push({ include, regex, 'used': false })
               break
             case 'reclass':
-              tags['reclass'].push({ include, regex })
+              tags['reclass'].push({ include, regex, 'used': false })
               break
             case 'misc':
-              tags['reclass'].push({ include, regex })
+              tags['misc'].push({ include, regex, 'used': false })
               break
             case undefined:
               tags['misc'].push({ include, regex })
@@ -179,78 +177,86 @@
               throw SyntaxError(`namespace '${namespace}' not supported`)
           }
         }
-
         console.debug(tags)
-        const matcher = (string, misc = false) => {
-          let status = 'ignore'
-          for (const namespace in tags) {
-            if (misc && namespace !== 'misc') {
-              // if in misc mode skip every tag that isn't in misc namespace
-              continue
+
+        const titleMatcher = (include, title, matchedTags = []) => {
+          let match = false
+          if (!(tags['misc'].length)) { return false }
+          tags['misc'].forEach((tag, index) => {
+            if (include) {
+              if (tag.include && tag.regex.test(title)) {
+                matchedTags.push(tag)
+                match = true
+              }
+            } else {
+              if (!tag.include && tag.regex.test(title)) {
+                matchedTags.push(tag)
+                match = true
+              }
             }
-            tags[namespace].some(tag => {
-              let searchString = string
-              if (namespace !== 'misc') {
-                if (string.includes(`${namespace}:`)) {
-                  searchString = searchString.replace(`${namespace}:`, '')
-                } else {
-                  // string is not in correct namespace, skip
-                  return false
-                }
-              }
-
-              if (tag.regex.test(searchString)) {
-                if (tag.include) {
-                  // string matches included tag, possibly include
-                  status = 'include'
-                  return false
-                } else {
-                  // string matches excluded tag, completely reject
-                  status = 'exclude'
-                  return true
-                }
-              }
-            })
-          }
-
-          return status
+          })
+          return match
         }
-        console.debug(`galleries before include: ${galleries.length}`)
+
+        const includeMatcher = (includeTag, includeNamespace, tags) => {
+          if (!includeTag.include) { return true }
+          return tags.some(tag => {
+            const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['misc', tag]
+            if (includeNamespace === 'misc' || includeNamespace === namespace) {
+              return includeTag.regex.test(name)
+            }
+            return false
+          })
+        }
 
         // get galleries to include
+        console.debug(`galleries before include: ${galleries.length}`)
         galleries = galleries.filter(gallery => {
           let show = false
-          if (search.tags) {
-            if (gallery.info.tags.some(tag => matcher(tag) === 'include')) {
-              show = true
-            }
+          let matchedTags = []
+          if (search.name) {
+            show = (gallery.info.title && titleMatcher(true, gallery.info.title, matchedTags)) ||
+              (gallery.info.title_jpn && titleMatcher(true, gallery.info.title_jpn, matchedTags))
           }
           if (search.notes) {
-            if (matcher(gallery.note, true) === 'include') {
-              show = true
-            }
+            show = show || titleMatcher(true, gallery.note, matchedTags)
           }
-          if (search.name) {
-            if ((gallery.info.title && matcher(gallery.info.title, true) === 'include') ||
-              (gallery.info.title_jpn && matcher(gallery.info.title_jpn, true) === 'include')) {
-              show = true
+          for (const namespace in tags) {
+            if (search.tags) {
+              show = tags[namespace].every(tag => {
+                return matchedTags.some(mTag => tag.regex === mTag.regex) ||
+                  includeMatcher(tag, namespace, gallery.info.tags)
+              })
             }
+            if (!show) { break }
           }
           return show
         })
         console.debug(`galleries after include: ${galleries.length}`)
 
+        const excludeMatcher = (string) => {
+          const [namespace, name] = (string.includes(':')) ? string.split(':') : ['misc', string]
+          // check if string matches any tag in same namespace or in misc namespace
+          return (tags[namespace].some(tag => {
+            if (tag.include) { return false }
+            return tag.regex.test(name)
+          })) || (tags['misc'].some(tag => {
+            if (tag.include) { return false }
+            return tag.regex.test(name)
+          }))
+        }
+
         // now check for excludes
         galleries = galleries.filter(gallery => {
-          if (search.tags) {
-            return !(gallery.info.tags.some(tag => matcher(tag) === 'exclude'))
+          if (search.name) {
+            if ((gallery.info.title && titleMatcher(false, gallery.info.title)) ||
+              (gallery.info.title_jpn && titleMatcher(false, gallery.info.title_jpn))) { return false }
           }
           if (search.notes) {
-            return !(matcher(gallery.note, true) === 'exclude')
+            if (titleMatcher(false, gallery.note)) { return false }
           }
-          if (search.name) {
-            return !((gallery.info.title && matcher(gallery.info.title, true) === 'exclude') ||
-              (gallery.info.title_jpn && matcher(gallery.info.title_jpn, true) === 'exclude'))
+          if (search.tags) {
+            if (gallery.info.tags.some(tag => excludeMatcher(tag))) { return false }
           }
           return true
         })
@@ -574,7 +580,7 @@
     return selection
   }
 
-  function newExtended (gallery, template) {
+  function newExtended (gallery, template, tags = false) {
     const selection = template.cloneNode(true)
     const image = selection.querySelector('img')
     const title = selection.querySelector('.glink')
@@ -659,20 +665,24 @@
     entryPoint.innerHTML = ''
     const tagsCategorized = {}
     gallery.info.tags.forEach(tag => {
-      const [category, name] = (tag.includes(':')) ? tag.split(':') : ['misc', tag]
-      if (!(category in tagsCategorized)) {
-        tagsCategorized[category] = []
+      const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['misc', tag]
+      if (!(namespace in tagsCategorized)) {
+        tagsCategorized[namespace] = []
       }
-      tagsCategorized[category].push(name)
+      const highlight = tags ? (tags[namespace].some(matchTag => matchTag.include && matchTag.regex.test(name)) ||
+        tags['misc'].some(matchTag => matchTag.include && matchTag.regex.test(name))) : false
+      tagsCategorized[namespace].push({ name, highlight })
     })
+
     for (const category in tagsCategorized) {
       const categoryTR = parser(`<tr></tr>`)
       const categoryTD = parser(`<td></td>`)
       entryPoint.appendChild(categoryTR)
       categoryTR.appendChild(parser(`<td class="tc">${category}:</td>`))
       categoryTR.appendChild(categoryTD)
-      tagsCategorized[category].forEach(name => {
-        categoryTD.appendChild(parser(`<div class="gt" title="${category}:${name}">${name}</div>`))
+      tagsCategorized[category].forEach(tag => {
+        const style = tag.highlight ? 'color:#090909;border-color:#ffbf36;background:radial-gradient(#ffbf36,#ffba00) !important' : ''
+        categoryTD.appendChild(parser(`<div class="gt" style="${style}" title="${category}:${tag.name}">${tag.name}</div>`))
       })
     }
 
@@ -861,9 +871,9 @@
           'notes': noteCheck.checked,
           'tags': tagsCheck.checked
         } : false
-        console.debug(search)
+        console.debug(search || 'no search')
         const { galleries, number, tags } = list.galleries(search, order, page, count)
-        console.debug(`found ${number} galleries...`)
+        console.debug(`found ${number} galleries`)
 
         sum.innerHTML = `Showing ${number.toLocaleString()} results`
 
@@ -923,7 +933,7 @@
           case 'l':
             break
           case 'e':
-            galleries.forEach(gallery => galleryLocation.append(newExtended(gallery, galleryTemplate)))
+            galleries.forEach(gallery => galleryLocation.append(newExtended(gallery, galleryTemplate, tags)))
             break
           case 't':
             break
