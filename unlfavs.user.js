@@ -877,6 +877,8 @@
 
         sum.innerHTML = `Showing ${number.toLocaleString()} results`
 
+        orderLink.href = `#${string}`
+
         // adjust page selection
         pageSelections.forEach(pageSelection => {
           const pageTemplate = pageSelection.children[1].cloneNode(true)
