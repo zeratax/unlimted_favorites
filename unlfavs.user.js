@@ -102,7 +102,7 @@
 
         let match
         while (match = tagsRE.exec(search.text)) { // eslint-disable-line no-cond-assign
-          const [str, category, tag] = match
+          const [str, namespace, tag] = match
           let include = (str[0] !== '-')
           let restring = tag
 
@@ -112,7 +112,7 @@
             .replace(/\*/g, '.*?')
             .replace(/%/g, '.*?'), 'gi')
 
-          switch (category) {
+          switch (namespace) {
             case 'f':
               tags['female'].push({ include, regex })
               break
@@ -141,31 +141,31 @@
               tags['parody'].push({ include, regex })
               break
             case 'r':
-              tags['parody'].push({ include, regex })
+              tags['reclass'].push({ include, regex })
               break
             case undefined:
               tags['misc'].push({ include, regex })
               break
             default:
-              throw SyntaxError(`category type '${category}' not supported`)
+              throw SyntaxError(`namespace '${namespace}' not supported`)
           }
         }
 
         console.debug(tags)
         const matcher = (string, misc = false) => {
           let status = 'ignore'
-          for (const category in tags) {
-            if (misc && category !== 'misc') {
-              // if in misc mode skip every tag that isn't in misc category
+          for (const namespace in tags) {
+            if (misc && namespace !== 'misc') {
+              // if in misc mode skip every tag that isn't in misc namespace
               continue
             }
-            tags[category].some(tag => {
+            tags[namespace].some(tag => {
               let searchString = string
-              if (category !== 'misc') {
-                if (string.includes(`${category}:`)) {
-                  searchString = searchString.replace(`${category}:`, '')
+              if (namespace !== 'misc') {
+                if (string.includes(`${namespace}:`)) {
+                  searchString = searchString.replace(`${namespace}:`, '')
                 } else {
-                  // string is not in correct category, skip
+                  // string is not in correct namespace, skip
                   return false
                 }
               }
@@ -905,8 +905,8 @@
       // save search in hash / reapply search from hash
       if (window.location.hash) {
         const hash = decodeURIComponent(window.location.hash.slice(1))
-        searchBox.value = hash
-        insertGalleries(hash)
+        searchBox.value = (hash !== 'false') ? hash : ''
+        insertGalleries(searchBox.value)
       } else {
         insertGalleries()
       }
@@ -1017,7 +1017,6 @@
           const limit = 25
           const parallel = 4
           let promises = []
-          let counter = 0
 
           await _ULF.dict.lists.forEach(async list => {
             console.log(`queueing list ${list.name}`)
@@ -1031,7 +1030,6 @@
                   if (slice.length) {
                     getGalleryInfo(slice).then(entries => {
                       entries.forEach(info => {
-                        counter++
                         list.getGallery(info.gid).info = info
                       })
                     })
