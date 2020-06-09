@@ -98,28 +98,42 @@
       }
 
       if (search) {
-        const tagsRE = /-?(?:([a-zA-Z]):)?(".+?\$?"|-?[\w*%?]+)/g
+        const tagsRE = /-?(?:([a-zA-Z]+):)?(".+?\$?"|-?[\w*%?]+)/g
 
         let match
         while (match = tagsRE.exec(search.text)) { // eslint-disable-line no-cond-assign
           const [str, namespace, tag] = match
           let include = (str[0] !== '-')
-          let restring = tag
+          let regexString = tag
 
-          const regex = new RegExp(restring.replace(/"/g, '')
+          const regex = new RegExp(regexString.replace(/"/g, '')
             .replace(/\?/g, '.')
             .replace(/_/g, '.')
             .replace(/\*/g, '.*?')
             .replace(/%/g, '.*?'), 'gi')
 
+          console.debug(namespace)
+
           switch (namespace) {
+            case 'artist':
+              tags['artist'].push({ include, regex })
+              break
             case 'f':
+              tags['female'].push({ include, regex })
+              break
+            case 'female':
               tags['female'].push({ include, regex })
               break
             case 'c':
               tags['character'].push({ include, regex })
               break
+            case 'character':
+              tags['character'].push({ include, regex })
+              break
             case 'g':
+              tags['group'].push({ include, regex })
+              break
+            case 'group':
               tags['group'].push({ include, regex })
               break
             case 'circle':
@@ -131,16 +145,31 @@
             case 'l':
               tags['language'].push({ include, regex })
               break
+            case 'language':
+              tags['language'].push({ include, regex })
+              break
             case 'm':
               tags['male'].push({ include, regex })
               break
+            case 'male':
+              tags['male'].push({ include, regex })
+              break
             case 'p':
+              tags['parody'].push({ include, regex })
+              break
+            case 'parody':
               tags['parody'].push({ include, regex })
               break
             case 'series':
               tags['parody'].push({ include, regex })
               break
             case 'r':
+              tags['reclass'].push({ include, regex })
+              break
+            case 'reclass':
+              tags['reclass'].push({ include, regex })
+              break
+            case 'misc':
               tags['reclass'].push({ include, regex })
               break
             case undefined:
@@ -186,6 +215,7 @@
 
           return status
         }
+        console.debug(`galleries before include: ${galleries.length}`)
 
         // get galleries to include
         galleries = galleries.filter(gallery => {
@@ -833,7 +863,7 @@
         } : false
         console.debug(search)
         const { galleries, number, tags } = list.galleries(search, order, page, count)
-        console.debug(`adding ${number} galleries...`)
+        console.debug(`found ${number} galleries...`)
 
         sum.innerHTML = `Showing ${number.toLocaleString()} results`
 
@@ -912,7 +942,7 @@
       }
 
       // start a search when changing text input or categories
-      searchBox.oninput = () => insertGalleries(searchBox.value)
+      searchBox.onchange = () => insertGalleries(searchBox.value)
       nameCheck.onclick = () => insertGalleries(searchBox.value)
       tagsCheck.onclick = () => insertGalleries(searchBox.value)
       noteCheck.onclick = () => insertGalleries(searchBox.value)
