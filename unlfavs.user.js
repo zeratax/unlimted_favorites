@@ -26,6 +26,9 @@
 
   const urlParams = new URLSearchParams(window.location.search)
 
+  // Magic Numbers
+  const HUEOFFSET = 75
+
   let importString = ''
 
   // CLASSES
@@ -98,77 +101,78 @@
       }
 
       if (search) {
-        const tagsRE = /-?(?:([a-zA-Z]+):)?(".+?\$?"|-?[\w*%?]+)/g
+        const tagsRE = /-?(?:([a-zA-Z]+):)?(".+?\$?"|-?[\w*%$?]+)/g
 
         let match
         while (match = tagsRE.exec(search.text)) { // eslint-disable-line no-cond-assign
           const [str, namespace, tag] = match
           let include = (str[0] !== '-')
           let regexString = tag
+          console.debug(tag)
 
           const regex = new RegExp(regexString.replace(/"/g, '')
             .replace(/\?/g, '.')
             .replace(/_/g, '.')
             .replace(/\*/g, '.*?')
-            .replace(/%/g, '.*?'), 'gi')
+            .replace(/%/g, '.*?'), 'i')
 
           switch (namespace) {
             case 'artist':
-              tags['artist'].push({ include, regex, 'used': false })
+              tags['artist'].push({ include, regex })
               break
             case 'f':
-              tags['female'].push({ include, regex, 'used': false })
+              tags['female'].push({ include, regex })
               break
             case 'female':
-              tags['female'].push({ include, regex, 'used': false })
+              tags['female'].push({ include, regex })
               break
             case 'c':
-              tags['character'].push({ include, regex, 'used': false })
+              tags['character'].push({ include, regex })
               break
             case 'character':
-              tags['character'].push({ include, regex, 'used': false })
+              tags['character'].push({ include, regex })
               break
             case 'g':
-              tags['group'].push({ include, regex, 'used': false })
+              tags['group'].push({ include, regex })
               break
             case 'group':
-              tags['group'].push({ include, regex, 'used': false })
+              tags['group'].push({ include, regex })
               break
             case 'circle':
-              tags['group'].push({ include, regex, 'used': false })
+              tags['group'].push({ include, regex })
               break
             case 'creator':
-              tags['group'].push({ include, regex, 'used': false })
+              tags['group'].push({ include, regex })
               break
             case 'l':
-              tags['language'].push({ include, regex, 'used': false })
+              tags['language'].push({ include, regex })
               break
             case 'language':
-              tags['language'].push({ include, regex, 'used': false })
+              tags['language'].push({ include, regex })
               break
             case 'm':
-              tags['male'].push({ include, regex, 'used': false })
+              tags['male'].push({ include, regex })
               break
             case 'male':
-              tags['male'].push({ include, regex, 'used': false })
+              tags['male'].push({ include, regex })
               break
             case 'p':
-              tags['parody'].push({ include, regex, 'used': false })
+              tags['parody'].push({ include, regex })
               break
             case 'parody':
-              tags['parody'].push({ include, regex, 'used': false })
+              tags['parody'].push({ include, regex })
               break
             case 'series':
-              tags['parody'].push({ include, regex, 'used': false })
+              tags['parody'].push({ include, regex })
               break
             case 'r':
-              tags['reclass'].push({ include, regex, 'used': false })
+              tags['reclass'].push({ include, regex })
               break
             case 'reclass':
-              tags['reclass'].push({ include, regex, 'used': false })
+              tags['reclass'].push({ include, regex })
               break
             case 'misc':
-              tags['misc'].push({ include, regex, 'used': false })
+              tags['misc'].push({ include, regex })
               break
             case undefined:
               tags['misc'].push({ include, regex })
@@ -182,7 +186,7 @@
         const titleMatcher = (include, title, matchedTags = []) => {
           let match = false
           if (!(tags['misc'].length)) { return false }
-          tags['misc'].forEach((tag, index) => {
+          tags['misc'].forEach(tag => {
             if (include) {
               if (tag.include && tag.regex.test(title)) {
                 matchedTags.push(tag)
@@ -213,7 +217,7 @@
         console.debug(`galleries before include: ${galleries.length}`)
         galleries = galleries.filter(gallery => {
           let show = false
-          let matchedTags = []
+          let matchedTags = [] // search tags used for notes / title should not be reused for gallery tags
           if (search.name) {
             show = (gallery.info.title && titleMatcher(true, gallery.info.title, matchedTags)) ||
               (gallery.info.title_jpn && titleMatcher(true, gallery.info.title_jpn, matchedTags))
@@ -221,15 +225,16 @@
           if (search.notes) {
             show = show || titleMatcher(true, gallery.note, matchedTags)
           }
-          for (const namespace in tags) {
-            if (search.tags) {
+          if (search.tags) {
+            for (const namespace in tags) {
               show = tags[namespace].every(tag => {
                 return matchedTags.some(mTag => tag.regex === mTag.regex) ||
                   includeMatcher(tag, namespace, gallery.info.tags)
               })
+              if (!show) { break }
             }
-            if (!show) { break }
           }
+
           return show
         })
         console.debug(`galleries after include: ${galleries.length}`)
@@ -557,7 +562,7 @@
       input.addEventListener('focusout', event => clickAddList(event.srcElement))
     }
 
-    selection.querySelector('.i').style.filter = `invert(100%) hue-rotate(${inputcounter * 35}deg)`
+    selection.querySelector('.i').style.filter = `invert(100%) hue-rotate(${inputcounter * HUEOFFSET}deg)`
     inputcounter++
 
     return selection
@@ -571,7 +576,7 @@
     counterDIV.innerHTML = list._galleries.length
     nameDIV.innerHTML = list.name
     selection.onclick = () => { window.document.location = `/favorites.php?favcat=0&page=0&lid=${list.id}&ulfpage=0` }
-    selection.querySelector('.i').style.filter = `invert(100%) hue-rotate(${inputcounter * 35}deg)`
+    selection.querySelector('.i').style.filter = `invert(100%) hue-rotate(${inputcounter * HUEOFFSET}deg)`
     if (checked) {
       selection.classList.add('fps')
     }
@@ -858,9 +863,9 @@
       const insertGalleries = (string = false) => {
         if (string) {
           if (window.location.hash) {
-            document.location = window.location.href.split('#')[0] + `#${string}`
+            document.location = window.location.href.split('#')[0] + `#${encodeURIComponent(string)}`
           } else {
-            document.location += `#${string}`
+            document.location += `#${encodeURIComponent(string)}`
           }
         } else {
           document.location = window.location.href.split('#')[0] + '#'
@@ -895,7 +900,7 @@
             }
             const pageElement = pageTemplate.cloneNode(true)
             pageElement.querySelector('a').innerHTML = '<'
-            pageElement.querySelector('a').href = `/favorites.php?page=1&favcat=0&lid=${lid}&ulfpage=${page - 1}#${string}`
+            pageElement.querySelector('a').href = `/favorites.php?page=1&favcat=0&lid=${lid}&ulfpage=${page - 1}#${encodeURIComponent(string)}`
             pageSelection.appendChild(pageElement)
           }
           // [0-9] elements
@@ -911,7 +916,7 @@
               pageElement.classList.add('ptds')
             }
             pageElement.querySelector('a').innerHTML = index + 1
-            pageElement.querySelector('a').href = `/favorites.php?page=1&favcat=0&lid=${lid}&ulfpage=${index}#${string}`
+            pageElement.querySelector('a').href = `/favorites.php?page=1&favcat=0&lid=${lid}&ulfpage=${index}#${encodeURIComponent(string)}`
             pageSelection.appendChild(pageElement)
           }
           // > element
@@ -919,7 +924,7 @@
             pageSelection.appendChild(parser('<td class="ptdd">&gt;</td>'))
           } else {
             pageTemplate.querySelector('a').innerHTML = '>'
-            pageTemplate.querySelector('a').href = `/favorites.php?page=1&favcat=0&lid=${lid}&ulfpage=${page + 1}#${string}`
+            pageTemplate.querySelector('a').href = `/favorites.php?page=1&favcat=0&lid=${lid}&ulfpage=${page + 1}#${encodeURIComponent(string)}`
             pageTemplate.classList.remove('ptds')
             pageSelection.appendChild(pageTemplate)
           }
@@ -968,17 +973,23 @@
   }
   // GALLERY PAGE
   if (window.location.pathname.includes('/g/')) {
-    const gid = window.location.pathname.split('/')[2]
-    const list = _ULF.dict.getListByGid(gid)
+    const [id, token] = window.location.pathname.split('/').slice(2)
+    const list = _ULF.dict.getListByGid(id)
+
     // add favorite icon if gallery is in list
     if (list) {
       const offset = _ULF.dict._lists.indexOf(list)
       const favBtn = select('#gdf')
 
+      console.debug(list.getGallery(id))
+
       favBtn.innerHTML = '<div style="float:left; cursor:pointer" id="fav">' +
       `<div class="i" style="background-image:url(https://exhentai.org/img/fav.png); background-position:0px -173px; margin-left:16px" title="${list.name}">` +
       `</div></div><div style="float:left">&nbsp; <a id="favoritelink" href="#" onclick="return false">${list.name}</a></div><div class="c"></div>`
-      favBtn.querySelector('.i').style.filter = `invert(100%) hue-rotate(${offset * 35}deg)`
+      favBtn.querySelector('.i').style.filter = `invert(100%) hue-rotate(${offset * HUEOFFSET}deg)`
+    } else {
+      const gallery = { id, token }
+      getGalleryInfo([gallery]).then(info => console.debug(info[0]))
     }
   }
   // SETTINGS
@@ -1195,7 +1206,7 @@
         input.checked = false
       }
 
-      selection.children[1].style.filter = `invert(100%) hue-rotate(${inputcounter * 35}deg)`
+      selection.children[1].style.filter = `invert(100%) hue-rotate(${inputcounter * HUEOFFSET}deg)`
       selection.children[1].onclick = () => input.click()
       selection.children[2].innerHTML = name
       selection.children[2].onclick = () => input.click()
@@ -1267,7 +1278,7 @@
       if (list) {
         const offset = _ULF.dict._lists.indexOf(list)
         favButton.style = 'border-color: rgb(238, 136, 238); background-color: rgba(224, 128, 224, 0.1);'
-        favButton.style.filter = `invert(100%) hue-rotate(${offset * 35}deg)`
+        favButton.style.filter = `invert(100%) hue-rotate(${offset * HUEOFFSET}deg)`
       }
     })
   }
