@@ -17,18 +17,14 @@
 
 (async function () {
   // CONSTANTS
-  const domain = window.location.hostname
-  const imageDomain = (domain === 'exhentai.org') ? 'https://exhentai.org/img' : 'https://ehgt.org/g'
-  const favIcon = `background-image:url(${imageDomain}/fav.png); background-position:0px -172px`
-
   const select = query => window.document.querySelector(query)
   const selectAll = query => window.document.querySelectorAll(query)
-
   const urlParams = new URLSearchParams(window.location.search)
 
   // Magic Numbers
   const HUEOFFSET = 75
 
+  // GLOBALS
   let importString = ''
 
   // CLASSES
@@ -362,7 +358,7 @@
   function parser (html) {
     const template = document.createElement('template')
     template.innerHTML = html
-    return template.content.firstChild
+    return template.content.firstElementChild
   }
 
   // SCRIPT INITIALIZATION
@@ -545,6 +541,46 @@
     return '//ehgt.org//t/' + url.split('/').slice(3).join('/').replace('_l', '_250')
   }
 
+  function getRatingStyle (rating) {
+    // not entirely correct
+    const ratingOffset = [0, 0]
+    ratingOffset[1] = (80 - Math.round(rating) * 16) * -1
+    if ((Math.round(rating) - Math.floor(rating)) === 0) {
+      ratingOffset[0] = -20
+      ratingOffset[1] += 16
+    }
+    return `background-position:${ratingOffset[1]}px ${ratingOffset[0]}px;opacity:1`
+  }
+
+  function getCategoryClass (category) {
+    switch (category) {
+      case 'Misc':
+        return 'cn ct1'
+      case 'Doujinshi':
+        return 'cn ct2'
+      case 'Manga':
+        return 'cn ct3'
+      case 'Artist CG':
+        return 'cn ct4'
+      case 'Artist CG Sets':
+        return 'cn ct4'
+      case 'Game CG':
+        return 'cn ct5'
+      case 'Image Set':
+        return 'cn ct6'
+      case 'Cosplay':
+        return 'cn ct7'
+      case 'Asian Porn':
+        return 'cn ct8'
+      case 'Non-H':
+        return 'cn ct9'
+      case 'Western':
+        return 'cn cta'
+      default:
+        throw window.InternalError(`category type '${category}' not supported!`)
+    }
+  }
+
   let inputcounter = 0
   function newInput (name, id, template, counter, last = false) {
     const selection = template.cloneNode(true)
@@ -618,52 +654,8 @@
       torrent.innerHTML = '<img src="https://exhentai.org/img/td.png" alt="T" title="No torrents available">'
     }
 
-    // not entirely correct
-    const ratingOffset = [0, 0]
-    ratingOffset[1] = (80 - Math.round(gallery.info.rating) * 16) * -1
-    if ((Math.round(gallery.info.rating) - Math.floor(gallery.info.rating)) === 0) {
-      ratingOffset[0] = -20
-      ratingOffset[1] += 16
-    }
-    rating.style = `background-position:${ratingOffset[1]}px ${ratingOffset[0]}px;opacity:1`
-
-    switch (gallery.info.category) {
-      case 'Misc':
-        categoryTitle.className = 'cn ct1'
-        break
-      case 'Doujinshi':
-        categoryTitle.className = 'cn ct2'
-        break
-      case 'Manga':
-        categoryTitle.className = 'cn ct3'
-        break
-      case 'Artist CG':
-        categoryTitle.className = 'cn ct4'
-        break
-      case 'Artist CG Sets':
-        categoryTitle.className = 'cn ct4'
-        break
-      case 'Game CG':
-        categoryTitle.className = 'cn ct5'
-        break
-      case 'Image Set':
-        categoryTitle.className = 'cn ct6'
-        break
-      case 'Cosplay':
-        categoryTitle.className = 'cn ct7'
-        break
-      case 'Asian Porn':
-        categoryTitle.className = 'cn ct8'
-        break
-      case 'Non-H':
-        categoryTitle.className = 'cn ct9'
-        break
-      case 'Western':
-        categoryTitle.className = 'cn cta'
-        break
-      default:
-        throw window.InternalError(`category type '${gallery.info.category}' not supported!`)
-    }
+    rating.style = getRatingStyle(gallery.info.rating)
+    categoryTitle.className = getCategoryClass(gallery.info.category)
 
     // add tags
     const entryPoint = tagsSection.querySelector('tbody')
@@ -695,6 +687,78 @@
     const url = `/g/${gallery.id}/${gallery.token}/`
     selection.querySelector('a').href = url
     tagsSection.href = url
+
+    return selection
+  }
+
+  function newThumbnail (gallery, template, tags = false) {
+    const selection = template.cloneNode(true)
+    const image = selection.querySelector('img')
+    const title = selection.querySelector('.glink')
+    const category = selection.querySelector('.gl5t')
+    const categoryTitle = category.firstElementChild.firstElementChild
+    const dateUploaded = category.firstElementChild.children[1]
+    const rating = category.lastElementChild.firstElementChild
+    const pageCounter = category.lastElementChild.children[1]
+    const torrent = category.lastElementChild.children[2]
+    const tagsSection = selection.querySelector('.gl6t')
+
+    image.src = getLargeThumbnail(gallery.info.thumb)
+    image.alt = gallery.info.title || gallery.info.title_jpn
+    image.title = gallery.info.title || gallery.info.title_jpn
+    title.innerHTML = gallery.info.title || gallery.info.title_jpn
+    dateUploaded.innerHTML = timeConverter(gallery.info.posted)
+    dateUploaded.onclick = () => popUp(`/gallerypopups.php?gid=${gallery.id}&t=${gallery.token}&act=addfav`, 675, 415)
+    pageCounter.innerHTML = gallery.info.filecount
+    categoryTitle.innerHTML = gallery.info.category
+    if ('torrents' in gallery.info && gallery.info.torrents.length) {
+      torrent.innerHTML = `<a href="/gallerytorrents.php?gid=${gallery.id}&t=${gallery.token}"` +
+      `onclick="return popUp('/gallerytorrents.php?gid=${gallery.id}&t=${gallery.token}', 610, 590)" rel="nofollow">` +
+      '<img src="https://exhentai.org/img/t.png" alt="T" title="Show torrents"></a>'
+    } else {
+      torrent.innerHTML = '<img src="https://exhentai.org/img/td.png" alt="T" title="No torrents available">'
+    }
+
+    rating.style = getRatingStyle(gallery.info.rating)
+
+    categoryTitle.className = getCategoryClass(gallery.info.category)
+
+    // add tags
+    tagsSection.innerHTML = ''
+    const tagsCategorized = {
+      'female': [],
+      'artist': [],
+      'male': [],
+      'character': [],
+      'group': [],
+      'language': [],
+      'misc': [],
+      'parody': [],
+      'reclass': []
+    }
+    gallery.info.tags.forEach(tag => {
+      const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['misc', tag]
+      const highlight = tags ? (tags[namespace].some(matchTag => matchTag.include && matchTag.regex.test(name)) ||
+        tags['misc'].some(matchTag => matchTag.include && matchTag.regex.test(name))) : false
+      tagsCategorized[namespace].push({ name, highlight })
+    })
+
+    let index = 0
+    for (const category in tagsCategorized) {
+      tagsCategorized[category].forEach(tag => {
+        const style = 'color:#090909;border-color:#b58411c9;background:radial-gradient(#ffbf36,#ffba00);' +
+         `filter: hue-rotate(${index * HUEOFFSET}deg);`
+        if (tag.highlight) {
+          tagsSection.appendChild(parser(`<div class="gt" style="${style}" title="${category}:${tag.name}">${tag.name}</div>`))
+        }
+      })
+      index++
+    }
+
+    // change links
+    const url = `/g/${gallery.id}/${gallery.token}/`
+    selection.querySelector('a').href = url
+    image.parentElement.href = url
 
     return selection
   }
@@ -851,9 +915,11 @@
           break
         case 'e':
           galleryLocation = select('table.itg > tbody')
-          galleryTemplate = galleryLocation.children[0].cloneNode(true)
+          galleryTemplate = galleryLocation.firstElementChild.cloneNode(true)
           break
         case 't':
+          galleryLocation = select('.itg.gld')
+          galleryTemplate = galleryLocation.firstElementChild.cloneNode(true)
           break
         default:
           throw window.InternalError('current mode not supported, only supports ' +
@@ -943,6 +1009,7 @@
             galleries.forEach(gallery => galleryLocation.append(newExtended(gallery, galleryTemplate, tags)))
             break
           case 't':
+            galleries.forEach(gallery => galleryLocation.append(newThumbnail(gallery, galleryTemplate, tags)))
             break
           default:
             throw window.InternalError('current mode not supported, only supports ' +
@@ -981,6 +1048,7 @@
       const offset = _ULF.dict._lists.indexOf(list)
       const favBtn = select('#gdf')
 
+      // dumb gallery info
       console.debug(list.getGallery(id))
 
       favBtn.innerHTML = '<div style="float:left; cursor:pointer" id="fav">' +
@@ -988,6 +1056,7 @@
       `</div></div><div style="float:left">&nbsp; <a id="favoritelink" href="#" onclick="return false">${list.name}</a></div><div class="c"></div>`
       favBtn.querySelector('.i').style.filter = `invert(100%) hue-rotate(${offset * HUEOFFSET}deg)`
     } else {
+      // dumb gallery info
       const gallery = { id, token }
       getGalleryInfo([gallery]).then(info => console.debug(info[0]))
     }
@@ -1146,7 +1215,7 @@
                 select('#favdel').checked = true
 
                 resolve('gallery moved')
-                // don't understand why this needs to be here the
+                // don't understand why this needs to be here
                 window.opener.location.reload(false)
                 form.submit()
               })
@@ -1166,7 +1235,7 @@
                 _ULF.dict.save()
                 select('#favdel').checked = true
                 resolve('gallery added')
-                // don't understand why this needs to be here the
+                // don't understand why this needs to be here
                 window.opener.location.reload(false)
                 form.submit()
               })
@@ -1287,7 +1356,7 @@
 GM_addStyle(`* {
     .ulf_import_box {
         width: 250px;
-    } 
+    }
     .ulf_import_box > input {
         width: 100%
     }
