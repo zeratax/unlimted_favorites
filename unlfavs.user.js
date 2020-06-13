@@ -634,6 +634,7 @@
     const torrent = category.children[5]
     const dateFavorited = category.children[6].lastElementChild
     const tagsSection = selection.querySelector('.gl3e').nextElementSibling
+    const note = selection.querySelector('.glfnote')
 
     image.src = getLargeThumbnail(gallery.info.thumb)
     image.alt = gallery.info.title || gallery.info.title_jpn
@@ -653,7 +654,7 @@
     } else {
       torrent.innerHTML = '<img src="https://exhentai.org/img/td.png" alt="T" title="No torrents available">'
     }
-
+    note.innerHTML = (gallery.note) ? `Note: ${gallery.note}` : ''
     rating.style = getRatingStyle(gallery.info.rating)
     categoryTitle.className = getCategoryClass(gallery.info.category)
 
@@ -702,6 +703,7 @@
     const pageCounter = category.lastElementChild.children[1]
     const torrent = category.lastElementChild.children[2]
     const tagsSection = selection.querySelector('.gl6t')
+    const note = selection.querySelector('.glfnote')
 
     image.src = getLargeThumbnail(gallery.info.thumb)
     image.alt = gallery.info.title || gallery.info.title_jpn
@@ -718,9 +720,8 @@
     } else {
       torrent.innerHTML = '<img src="https://exhentai.org/img/td.png" alt="T" title="No torrents available">'
     }
-
+    note.innerHTML = (gallery.note) ? `Note: ${gallery.note}` : ''
     rating.style = getRatingStyle(gallery.info.rating)
-
     categoryTitle.className = getCategoryClass(gallery.info.category)
 
     // add tags
@@ -1185,7 +1186,12 @@
     const list = _ULF.dict.getListByGid(gid) || false
     let currentClick = list.id || selected
     let lastClick = currentClick
-    const note = select('textarea[name=favnote]').value
+    const note = select('textarea[name=favnote]')
+
+    if (list) {
+      const gallery = list.getGallery(gid)
+      note.value = gallery.note
+    }
 
     // disable apply button
     const applyBtn = select('input[name=apply]')
@@ -1209,7 +1215,7 @@
               const newList = _ULF.dict.getListByLid(src.getAttribute('lid'))
               console.debug(`moving gallery from '${list.name}' to '${newList.name}'`)
               list.removeGallery(gid)
-              newList.addGallery(gid, token, note).then(response => {
+              newList.addGallery(gid, token, note.value).then(response => {
                 console.debug(response)
                 _ULF.dict.save()
                 select('#favdel').checked = true
@@ -1230,7 +1236,7 @@
             if (src.hasAttribute('lid')) {
               const newList = _ULF.dict.getListByLid(src.getAttribute('lid'))
               console.debug(`adding a gallery to ULF list '${newList.name}'`)
-              newList.addGallery(gid, token, note).then(response => {
+              newList.addGallery(gid, token, note.value).then(response => {
                 console.debug(response)
                 _ULF.dict.save()
                 select('#favdel').checked = true
