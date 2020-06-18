@@ -415,6 +415,18 @@
     if (!GMJSON.version) {
       GMJSON.version = '0.6.5'
     }
+
+    // Allow to backup before doing any other changes to the user data
+    if (versionCompare(String(GMJSON.version), GM_info.script.version) === -1) {
+      const confirmation = window.confirm(`Unlimited Favorites has been updated to version ${GM_info.script.version},` +
+      'do you want to create a backup before updating your data?\n' +
+      `see what's new here: https://github.com/ZerataX/unlimted_favorites/releases/tag/${GM_info.script.version}`)
+      if (confirmation) {
+        const fileName = 'unl_favs_' + new Date().toISOString() + '.json'
+        download(JSON.stringify(GMJSON), fileName, 'text/json')
+      }
+    } 
+
     if (versionCompare(String(GMJSON.version), '0.7.0') === -1) {
       // fix saved JSONs from < 0.7.0 versions
       // id from string to int
@@ -424,6 +436,7 @@
         }
       }
     }
+
     if (versionCompare(String(GMJSON.version), '0.8.0') === -1) {
     // fix saved JSONs from < 0.8.0 versions
     // rename date to timestamp
