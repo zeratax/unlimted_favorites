@@ -1,2 +1,4 @@
 coverage/
 *.json
+.nvmrc
+show_pane.js

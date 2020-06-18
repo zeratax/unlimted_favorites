@@ -13,7 +13,7 @@
 // @grant          GM_addStyle
 // @version        0.8.0
 // ==/UserScript==
-/* global GM_setValue GM_getValue GM_info GM_addStyle, selected, popUp */
+/* global GM_setValue GM_getValue GM_info GM_addStyle, selected, popUp, show_image_pane, hide_image_pane */
 
 (async function () {
   // CONSTANTS
@@ -85,15 +85,15 @@
       let galleries = this._galleries
       const index = page * count
       const tags = {
-        'artist': [],
-        'character': [],
-        'female': [],
-        'group': [],
-        'language': [],
-        'male': [],
-        'misc': [],
-        'parody': [],
-        'reclass': []
+        artist: [],
+        character: [],
+        female: [],
+        group: [],
+        language: [],
+        male: [],
+        misc: [],
+        parody: [],
+        reclass: []
       }
 
       if (search) {
@@ -102,8 +102,8 @@
         let match
         while (match = tagsRE.exec(search.text)) { // eslint-disable-line no-cond-assign
           const [str, namespace, tag] = match
-          let include = (str[0] !== '-')
-          let regexString = tag
+          const include = (str[0] !== '-')
+          const regexString = tag
           console.debug(tag)
 
           const regex = new RegExp(regexString.replace(/"/g, '')
@@ -114,64 +114,64 @@
 
           switch (namespace) {
             case 'artist':
-              tags['artist'].push({ include, regex })
+              tags.artist.push({ include, regex })
               break
             case 'f':
-              tags['female'].push({ include, regex })
+              tags.female.push({ include, regex })
               break
             case 'female':
-              tags['female'].push({ include, regex })
+              tags.female.push({ include, regex })
               break
             case 'c':
-              tags['character'].push({ include, regex })
+              tags.character.push({ include, regex })
               break
             case 'character':
-              tags['character'].push({ include, regex })
+              tags.character.push({ include, regex })
               break
             case 'g':
-              tags['group'].push({ include, regex })
+              tags.group.push({ include, regex })
               break
             case 'group':
-              tags['group'].push({ include, regex })
+              tags.group.push({ include, regex })
               break
             case 'circle':
-              tags['group'].push({ include, regex })
+              tags.group.push({ include, regex })
               break
             case 'creator':
-              tags['group'].push({ include, regex })
+              tags.group.push({ include, regex })
               break
             case 'l':
-              tags['language'].push({ include, regex })
+              tags.language.push({ include, regex })
               break
             case 'language':
-              tags['language'].push({ include, regex })
+              tags.language.push({ include, regex })
               break
             case 'm':
-              tags['male'].push({ include, regex })
+              tags.male.push({ include, regex })
               break
             case 'male':
-              tags['male'].push({ include, regex })
+              tags.male.push({ include, regex })
               break
             case 'p':
-              tags['parody'].push({ include, regex })
+              tags.parody.push({ include, regex })
               break
             case 'parody':
-              tags['parody'].push({ include, regex })
+              tags.parody.push({ include, regex })
               break
             case 'series':
-              tags['parody'].push({ include, regex })
+              tags.parody.push({ include, regex })
               break
             case 'r':
-              tags['reclass'].push({ include, regex })
+              tags.reclass.push({ include, regex })
               break
             case 'reclass':
-              tags['reclass'].push({ include, regex })
+              tags.reclass.push({ include, regex })
               break
             case 'misc':
-              tags['misc'].push({ include, regex })
+              tags.misc.push({ include, regex })
               break
             case undefined:
-              tags['misc'].push({ include, regex })
+              tags.misc.push({ include, regex })
               break
             default:
               throw SyntaxError(`namespace '${namespace}' not supported`)
@@ -181,8 +181,8 @@
 
         const titleMatcher = (include, title, matchedTags = []) => {
           let match = false
-          if (!(tags['misc'].length)) { return false }
-          tags['misc'].forEach(tag => {
+          if (!(tags.misc.length)) { return false }
+          tags.misc.forEach(tag => {
             if (include) {
               if (tag.include && tag.regex.test(title)) {
                 matchedTags.push(tag)
@@ -213,7 +213,7 @@
         console.debug(`galleries before include: ${galleries.length}`)
         galleries = galleries.filter(gallery => {
           let show = false
-          let matchedTags = [] // search tags used for notes / title should not be reused for gallery tags
+          const matchedTags = [] // search tags used for notes / title should not be reused for gallery tags
           if (search.name) {
             show = (gallery.info.title && titleMatcher(true, gallery.info.title, matchedTags)) ||
               (gallery.info.title_jpn && titleMatcher(true, gallery.info.title_jpn, matchedTags))
@@ -241,7 +241,7 @@
           return (tags[namespace].some(tag => {
             if (tag.include) { return false }
             return tag.regex.test(name)
-          })) || (tags['misc'].some(tag => {
+          })) || (tags.misc.some(tag => {
             if (tag.include) { return false }
             return tag.regex.test(name)
           }))
@@ -283,9 +283,9 @@
       }
 
       return {
-        'galleries': galleries.slice(index, index + count) || null,
-        'number': galleries.length || 0,
-        'tags': tags
+        galleries: galleries.slice(index, index + count) || null,
+        number: galleries.length || 0,
+        tags: tags
       }
     }
 
@@ -458,9 +458,9 @@
       {
         method: 'POST',
         body: JSON.stringify({
-          'method': 'gdata',
-          'gidlist': galleries.map(gallery => [parseInt(gallery.id), gallery.token]),
-          'namespace': 1
+          method: 'gdata',
+          gidlist: galleries.map(gallery => [parseInt(gallery.id), gallery.token]),
+          namespace: 1
         })
       })
     return window.fetch(request)
@@ -473,7 +473,7 @@
   }
 
   Promise.eachLimit = async (funcs, limit, ms) => {
-    let rest = funcs.slice(limit)
+    const rest = funcs.slice(limit)
     await Promise.all(funcs.slice(0, limit).map(async func => {
       await func()
       while (rest.length) {
@@ -555,27 +555,27 @@
   function getCategoryClass (category) {
     switch (category) {
       case 'Misc':
-        return 'cn ct1'
+        return 'ct1'
       case 'Doujinshi':
-        return 'cn ct2'
+        return 'ct2'
       case 'Manga':
-        return 'cn ct3'
+        return 'ct3'
       case 'Artist CG':
-        return 'cn ct4'
+        return 'ct4'
       case 'Artist CG Sets':
-        return 'cn ct4'
+        return 'ct4'
       case 'Game CG':
-        return 'cn ct5'
+        return 'ct5'
       case 'Image Set':
-        return 'cn ct6'
+        return 'ct6'
       case 'Cosplay':
-        return 'cn ct7'
+        return 'ct7'
       case 'Asian Porn':
-        return 'cn ct8'
+        return 'ct8'
       case 'Non-H':
-        return 'cn ct9'
+        return 'ct9'
       case 'Western':
-        return 'cn cta'
+        return 'cta'
       default:
         throw window.InternalError(`category type '${category}' not supported!`)
     }
@@ -615,6 +615,8 @@
     selection.querySelector('.i').style.filter = `invert(100%) hue-rotate(${inputcounter * HUEOFFSET}deg)`
     if (checked) {
       selection.classList.add('fps')
+    } else {
+      selection.classList.remove('fps')
     }
     inputcounter++
 
@@ -635,6 +637,7 @@
     const dateFavorited = category.children[6].lastElementChild
     const tagsSection = selection.querySelector('.gl3e').nextElementSibling
     const note = selection.querySelector('.glfnote')
+    const checkbox = selection.querySelector('input[name="modifygids[]"]')
 
     image.src = getLargeThumbnail(gallery.info.thumb)
     image.alt = gallery.info.title || gallery.info.title_jpn
@@ -642,11 +645,13 @@
     title.innerHTML = gallery.info.title || gallery.info.title_jpn
     dateUploaded.innerHTML = timeConverter(gallery.info.posted)
     dateUploaded.onclick = () => popUp(`/gallerypopups.php?gid=${gallery.id}&t=${gallery.token}&act=addfav`, 675, 415)
+    dateUploaded.id = `posted_${gallery.id}`
     uploader.href = `uploader/${gallery.info.uploader}`
     uploader.innerHTML = gallery.info.uploader
     pageCounter.innerHTML = gallery.info.filecount
     dateFavorited.innerHTML = timeConverter(new Date(gallery.timestamp).getTime() / 1000)
     categoryTitle.innerHTML = gallery.info.category
+    categoryTitle.className = `cn ${getCategoryClass(gallery.info.category)}`
     if ('torrents' in gallery.info && gallery.info.torrents.length) {
       torrent.innerHTML = `<a href="/gallerytorrents.php?gid=${gallery.id}&t=${gallery.token}"` +
       `onclick="return popUp('/gallerytorrents.php?gid=${gallery.id}&t=${gallery.token}', 610, 590)" rel="nofollow">` +
@@ -655,8 +660,10 @@
       torrent.innerHTML = '<img src="https://exhentai.org/img/td.png" alt="T" title="No torrents available">'
     }
     note.innerHTML = (gallery.note) ? `Note: ${gallery.note}` : ''
+    note.id = `favnote_${gallery.id}`
+    note.style = ''
+    checkbox.value = gallery.id
     rating.style = getRatingStyle(gallery.info.rating)
-    categoryTitle.className = getCategoryClass(gallery.info.category)
 
     // add tags
     const entryPoint = tagsSection.querySelector('tbody')
@@ -668,13 +675,13 @@
         tagsCategorized[namespace] = []
       }
       const highlight = tags ? (tags[namespace].some(matchTag => matchTag.include && matchTag.regex.test(name)) ||
-        tags['misc'].some(matchTag => matchTag.include && matchTag.regex.test(name))) : false
+        tags.misc.some(matchTag => matchTag.include && matchTag.regex.test(name))) : false
       tagsCategorized[namespace].push({ name, highlight })
     })
 
     for (const category in tagsCategorized) {
-      const categoryTR = parser(`<tr></tr>`)
-      const categoryTD = parser(`<td></td>`)
+      const categoryTR = parser('<tr></tr>')
+      const categoryTD = parser('<td></td>')
       entryPoint.appendChild(categoryTR)
       categoryTR.appendChild(parser(`<td class="tc">${category}:</td>`))
       categoryTR.appendChild(categoryTD)
@@ -704,6 +711,7 @@
     const torrent = category.lastElementChild.children[2]
     const tagsSection = selection.querySelector('.gl6t')
     const note = selection.querySelector('.glfnote')
+    const checkbox = selection.querySelector('input[name="modifygids[]"]')
 
     image.src = getLargeThumbnail(gallery.info.thumb)
     image.alt = gallery.info.title || gallery.info.title_jpn
@@ -711,8 +719,10 @@
     title.innerHTML = gallery.info.title || gallery.info.title_jpn
     dateUploaded.innerHTML = timeConverter(gallery.info.posted)
     dateUploaded.onclick = () => popUp(`/gallerypopups.php?gid=${gallery.id}&t=${gallery.token}&act=addfav`, 675, 415)
+    dateUploaded.id = `posted_${gallery.id}`
     pageCounter.innerHTML = gallery.info.filecount
     categoryTitle.innerHTML = gallery.info.category
+    categoryTitle.className = `cn ${getCategoryClass(gallery.info.category)}`
     if ('torrents' in gallery.info && gallery.info.torrents.length) {
       torrent.innerHTML = `<a href="/gallerytorrents.php?gid=${gallery.id}&t=${gallery.token}"` +
       `onclick="return popUp('/gallerytorrents.php?gid=${gallery.id}&t=${gallery.token}', 610, 590)" rel="nofollow">` +
@@ -721,26 +731,28 @@
       torrent.innerHTML = '<img src="https://exhentai.org/img/td.png" alt="T" title="No torrents available">'
     }
     note.innerHTML = (gallery.note) ? `Note: ${gallery.note}` : ''
+    note.id = `favnote_${gallery.id}`
+    note.style = ''
+    checkbox.value = gallery.id
     rating.style = getRatingStyle(gallery.info.rating)
-    categoryTitle.className = getCategoryClass(gallery.info.category)
 
     // add tags
     tagsSection.innerHTML = ''
     const tagsCategorized = {
-      'female': [],
-      'artist': [],
-      'male': [],
-      'character': [],
-      'group': [],
-      'language': [],
-      'misc': [],
-      'parody': [],
-      'reclass': []
+      female: [],
+      artist: [],
+      male: [],
+      character: [],
+      group: [],
+      language: [],
+      misc: [],
+      parody: [],
+      reclass: []
     }
     gallery.info.tags.forEach(tag => {
       const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['misc', tag]
       const highlight = tags ? (tags[namespace].some(matchTag => matchTag.include && matchTag.regex.test(name)) ||
-        tags['misc'].some(matchTag => matchTag.include && matchTag.regex.test(name))) : false
+        tags.misc.some(matchTag => matchTag.include && matchTag.regex.test(name))) : false
       tagsCategorized[namespace].push({ name, highlight })
     })
 
@@ -760,6 +772,210 @@
     const url = `/g/${gallery.id}/${gallery.token}/`
     selection.querySelector('a').href = url
     image.parentElement.href = url
+
+    return selection
+  }
+
+  function newCompact (gallery, template, offset, tags = false) {
+    const selection = template.cloneNode(true)
+    const pane = selection.querySelector('.glthumb')
+    const paneImage = pane.querySelector('img')
+    const paneInfo = pane.lastElementChild
+    const paneCategoryTitle = paneInfo.firstElementChild.firstElementChild
+    const paneDate = paneInfo.firstElementChild.lastElementChild
+    const paneRating = paneInfo.lastElementChild.firstElementChild
+    const panePages = paneInfo.lastElementChild.lastElementChild
+    const categoryTitle = selection.querySelector('.glcat').firstElementChild
+    const glcut = selection.querySelector('.glcut')
+    const userInfo = selection.querySelector('.gl2c').lastElementChild
+    const dateUploaded = userInfo.children[0]
+    const rating = userInfo.children[1]
+    const torrent = userInfo.children[2]
+    const info = selection.querySelector('.glname')
+    const title = info.firstElementChild.children[0]
+    const tagsSection = info.firstElementChild.children[1]
+    const note = info.firstElementChild.children[2]
+    const dateFaved = selection.querySelector('.glfav')
+    const checkbox = selection.querySelector('input[name="modifygids[]"]')
+
+    info.onmouseover = () => show_image_pane(gallery.id)
+    info.onmouseout = () => hide_image_pane(gallery.id)
+    title.innerHTML = gallery.info.title || gallery.info.title_jpn
+    glcut.id = `ic${gallery.id}`
+    pane.id = `it${gallery.id}`
+    paneImage.src = getLargeThumbnail(gallery.info.thumb)
+    paneImage.alt = gallery.info.title || gallery.info.title_jpn
+    paneImage.title = gallery.info.title || gallery.info.title_jpn
+    paneCategoryTitle.innerHTML = gallery.info.category
+    paneCategoryTitle.className = `cn ${getCategoryClass(gallery.info.category)}`
+    paneCategoryTitle.id = `postedpop_${gallery.id}`
+    paneDate.innerHTML = timeConverter(gallery.info.posted)
+    paneDate.onclick = () => popUp(`/gallerypopups.php?gid=${gallery.id}&t=${gallery.token}&act=addfav`, 675, 415)
+    paneDate.id = `posted_${gallery.id}`
+    paneDate.style = 'border-color: rgb(238, 136, 238); background-color: rgba(224, 128, 224, 0.1);'
+    paneDate.style.filter = `invert(100%) hue-rotate(${offset * HUEOFFSET}deg)`
+    paneRating.style = getRatingStyle(gallery.info.rating)
+    panePages.innerHTML = gallery.info.filecount
+    dateUploaded.innerHTML = timeConverter(gallery.info.posted)
+    dateUploaded.onclick = () => popUp(`/gallerypopups.php?gid=${gallery.id}&t=${gallery.token}&act=addfav`, 675, 415)
+    dateUploaded.id = `posted_${gallery.id}`
+    dateFaved.innerHTML = timeConverter(new Date(gallery.timestamp).getTime() / 1000).replace(' ', '<br>')
+    categoryTitle.innerHTML = gallery.info.category
+    categoryTitle.className = `cn ${getCategoryClass(gallery.info.category)}`
+    if ('torrents' in gallery.info && gallery.info.torrents.length) {
+      torrent.innerHTML = `<a href="/gallerytorrents.php?gid=${gallery.id}&t=${gallery.token}"` +
+      `onclick="return popUp('/gallerytorrents.php?gid=${gallery.id}&t=${gallery.token}', 610, 590)" rel="nofollow">` +
+      '<img src="https://exhentai.org/img/t.png" alt="T" title="Show torrents"></a>'
+    } else {
+      torrent.innerHTML = '<img src="https://exhentai.org/img/td.png" alt="T" title="No torrents available">'
+    }
+    note.innerHTML = (gallery.note) ? `Note: ${gallery.note}` : ''
+    note.id = `favnote_${gallery.id}`
+    note.style = ''
+    checkbox.value = gallery.id
+    rating.style = getRatingStyle(gallery.info.rating)
+
+    // add tags
+    tagsSection.innerHTML = ''
+    const tagsCategorized = {
+      female: [],
+      artist: [],
+      male: [],
+      character: [],
+      group: [],
+      language: [],
+      misc: [],
+      parody: [],
+      reclass: []
+    }
+    gallery.info.tags.forEach(tag => {
+      const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['misc', tag]
+      const highlight = tags ? (tags[namespace].some(matchTag => matchTag.include && matchTag.regex.test(name)) ||
+        tags.misc.some(matchTag => matchTag.include && matchTag.regex.test(name))) : false
+      if (highlight) {
+        tagsCategorized[namespace].unshift({ name, highlight })
+      } else {
+        tagsCategorized[namespace].push({ name, highlight })
+      }
+    })
+
+    let count = 0
+    for (const category in tagsCategorized) {
+      tagsCategorized[category].some(tag => {
+        const style = (tag.highlight) ? 'color:#090909;border-color:#b58411c9;background:radial-gradient(#ffbf36,#ffba00);' : ''
+        tagsSection.appendChild(parser(`<div class="gt" style="${style}" title="${category}:${tag.name}">${tag.name}</div>`))
+        count++
+        return count > 8
+      })
+      if (count > 8) { break }
+    }
+
+    // change links
+    const url = `/g/${gallery.id}/${gallery.token}/`
+    title.parentElement.href = url
+    // image.parentElement.href = url
+
+    return selection
+  }
+
+  function newMinimal (gallery, template, offset, tags = false) {
+    const selection = template.cloneNode(true)
+    const pane = selection.querySelector('.glthumb')
+    const paneImage = pane.querySelector('img')
+    const paneInfo = pane.lastElementChild
+    const paneCategoryTitle = paneInfo.firstElementChild.firstElementChild
+    const paneDate = paneInfo.firstElementChild.lastElementChild
+    const paneRating = paneInfo.lastElementChild.firstElementChild
+    const panePages = paneInfo.lastElementChild.lastElementChild
+    const categoryTitle = selection.querySelector('.glcat').firstElementChild
+    const glcut = selection.querySelector('.glcut')
+    const dateUploaded = selection.querySelector('.gl2m').children[2]
+    const rating = selection.querySelector('.gl4m').firstElementChild
+    const torrent = selection.querySelector('.gldown')
+    const info = selection.querySelector('.glname')
+    const title = info.firstElementChild.children[0]
+    const tagsSection = info.firstElementChild.children[1]
+    // if no tags the note section is at the position of the tagsection
+    const note = (tags) ? info.firstElementChild.children[2] : tagsSection
+    const dateFaved = selection.querySelector('.glfav')
+    const checkbox = selection.querySelector('input[name="modifygids[]"]')
+
+    info.onmouseover = () => show_image_pane(gallery.id)
+    info.onmouseout = () => hide_image_pane(gallery.id)
+    title.innerHTML = gallery.info.title || gallery.info.title_jpn
+    glcut.id = `ic${gallery.id}`
+    pane.id = `it${gallery.id}`
+    paneImage.src = getLargeThumbnail(gallery.info.thumb)
+    paneImage.alt = gallery.info.title || gallery.info.title_jpn
+    paneImage.title = gallery.info.title || gallery.info.title_jpn
+    paneCategoryTitle.innerHTML = gallery.info.category
+    paneCategoryTitle.className = `cn ${getCategoryClass(gallery.info.category)}`
+    paneCategoryTitle.id = `postedpop_${gallery.id}`
+    paneDate.innerHTML = timeConverter(gallery.info.posted)
+    paneDate.onclick = () => popUp(`/gallerypopups.php?gid=${gallery.id}&t=${gallery.token}&act=addfav`, 675, 415)
+    paneDate.id = `posted_${gallery.id}`
+    paneDate.style = 'border-color: rgb(238, 136, 238); background-color: rgba(224, 128, 224, 0.1);'
+    paneDate.style.filter = `invert(100%) hue-rotate(${offset * HUEOFFSET}deg)`
+    paneRating.style = getRatingStyle(gallery.info.rating)
+    panePages.innerHTML = gallery.info.filecount
+    dateUploaded.innerHTML = timeConverter(gallery.info.posted)
+    dateUploaded.onclick = () => popUp(`/gallerypopups.php?gid=${gallery.id}&t=${gallery.token}&act=addfav`, 675, 415)
+    dateUploaded.id = `posted_${gallery.id}`
+    dateFaved.innerHTML = timeConverter(new Date(gallery.timestamp).getTime() / 1000)
+    categoryTitle.innerHTML = gallery.info.category
+    categoryTitle.className = `cs ${getCategoryClass(gallery.info.category)}`
+    if ('torrents' in gallery.info && gallery.info.torrents.length) {
+      torrent.innerHTML = `<a href="/gallerytorrents.php?gid=${gallery.id}&t=${gallery.token}"` +
+      `onclick="return popUp('/gallerytorrents.php?gid=${gallery.id}&t=${gallery.token}', 610, 590)" rel="nofollow">` +
+      '<img src="https://exhentai.org/img/t.png" alt="T" title="Show torrents"></a>'
+    } else {
+      torrent.innerHTML = '<img src="https://exhentai.org/img/td.png" alt="T" title="No torrents available">'
+    }
+    note.innerHTML = (gallery.note) ? `Note: ${gallery.note}` : ''
+    note.id = `favnote_${gallery.id}`
+    note.style = ''
+    checkbox.value = gallery.id
+    rating.style = getRatingStyle(gallery.info.rating)
+
+    // add tags
+    tagsSection.innerHTML = ''
+    const tagsCategorized = {
+      female: [],
+      artist: [],
+      male: [],
+      character: [],
+      group: [],
+      language: [],
+      misc: [],
+      parody: [],
+      reclass: []
+    }
+    gallery.info.tags.forEach(tag => {
+      const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['misc', tag]
+      const highlight = tags ? (tags[namespace].some(matchTag => matchTag.include && matchTag.regex.test(name)) ||
+        tags.misc.some(matchTag => matchTag.include && matchTag.regex.test(name))) : false
+      if (highlight) {
+        tagsCategorized[namespace].unshift({ name, highlight })
+      } else {
+        tagsCategorized[namespace].push({ name, highlight })
+      }
+    })
+
+    let count = 0
+    for (const category in tagsCategorized) {
+      tagsCategorized[category].some(tag => {
+        const style = (tag.highlight) ? 'color:#090909;border-color:#b58411c9;background:radial-gradient(#ffbf36,#ffba00);' : ''
+        tagsSection.appendChild(parser(`<div class="gt" style="${style}" title="${category}:${tag.name}">${tag.name}</div>`))
+        count++
+        return count > 5
+      })
+      if (count > 5) { break }
+    }
+
+    // change links
+    const url = `/g/${gallery.id}/${gallery.token}/`
+    title.parentElement.href = url
+    // image.parentElement.href = url
 
     return selection
   }
@@ -886,6 +1102,7 @@
 
     if (lid) {
       const list = _ULF.dict.getListByLid(lid)
+      const offset = _ULF.dict._lists.indexOf(list)
       // select current list item
       const children = [...parent.children]
       children.forEach(item => {
@@ -909,10 +1126,16 @@
       let galleryLocation
       switch (mode.value) {
         case 'm':
+          galleryLocation = select('table.itg > tbody')
+          galleryTemplate = galleryLocation.children[1].cloneNode(true)
           break
         case 'p':
+          galleryLocation = select('table.itg > tbody')
+          galleryTemplate = galleryLocation.children[1].cloneNode(true)
           break
         case 'l':
+          galleryLocation = select('table.itg > tbody')
+          galleryTemplate = galleryLocation.children[1].cloneNode(true)
           break
         case 'e':
           galleryLocation = select('table.itg > tbody')
@@ -938,10 +1161,10 @@
           document.location = window.location.href.split('#')[0] + '#'
         }
         const search = (string) ? {
-          'text': string,
-          'name': nameCheck.checked,
-          'notes': noteCheck.checked,
-          'tags': tagsCheck.checked
+          text: string,
+          name: nameCheck.checked,
+          notes: noteCheck.checked,
+          tags: tagsCheck.checked
         } : false
         console.debug(search || 'no search')
         const { galleries, number, tags } = list.galleries(search, order, page, count)
@@ -999,12 +1222,22 @@
 
         // add gallery items
         galleryLocation.innerHTML = ''
+        let firstRow = ''
         switch (mode.value) {
           case 'm':
+            firstRow = parser('<tr><th></th><th>Published</th><th></th><th>Title</th><th></th><th colspan="2">Favorited</th></tr>')
+            galleryLocation.append(firstRow)
+            galleries.forEach(gallery => galleryLocation.append(newMinimal(gallery, galleryTemplate, offset)))
             break
           case 'p':
+            firstRow = parser('<tr><th></th><th>Published</th><th></th><th>Title</th><th></th><th colspan="2">Favorited</th></tr>')
+            galleryLocation.append(firstRow)
+            galleries.forEach(gallery => galleryLocation.append(newMinimal(gallery, galleryTemplate, offset, tags)))
             break
           case 'l':
+            firstRow = parser('<tr><th></th><th>Published</th><th>Title</th><th colspan="2">Favorited</th></tr>')
+            galleryLocation.append(firstRow)
+            galleries.forEach(gallery => galleryLocation.append(newCompact(gallery, galleryTemplate, offset, tags)))
             break
           case 'e':
             galleries.forEach(gallery => galleryLocation.append(newExtended(gallery, galleryTemplate, tags)))
@@ -1139,7 +1372,7 @@
         if (response === true) {
           const limit = 25
           const parallel = 4
-          let promises = []
+          const promises = []
 
           await _ULF.dict.lists.forEach(async list => {
             console.log(`queueing list ${list.name}`)
@@ -1203,7 +1436,7 @@
       const addULF = new Promise((resolve, reject) => {
         currentClick = src.id
         if (currentClick === lastClick) {
-          console.debug(`clicked already selected option, trying to perform action`)
+          console.debug('clicked already selected option, trying to perform action')
           if (list) {
             if (currentClick === 'favdel') {
               console.debug(`removing a gallery from ULF list '${list.name}'`)
