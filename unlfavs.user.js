@@ -1,617 +1,1671 @@
 // ==UserScript==
 // @name           unlimited favs
-// @namespace      zeratax@firemail.cc
+// @namespace      mail@zera.tax
+// @author         ZerataX
 // @description    Adds unlimited local favorite lists to sadpanda
-// @license        GPL-3.0
-// @include        https://e-hentai.org/*
-// @include        https://g.e-hentai.org/*
-// @include        http://exhentai.org/*
-// @include        https://exhentai.org/*
+// @homepage       https://github.com/ZerataX/unlimted_favorites/
+// @homepageURL    https://github.com/ZerataX/unlimted_favorites/
+// @supportURL     https://github.com/ZerataX/unlimted_favorites/issues/
+// @license        UNLICENSE
+// @include        /^https://e(x|-)hentai\.org/.*$/
 // @grant          GM_getValue
 // @grant          GM_setValue
-// @grant          GM_xmlhttpRequest
-// @require        https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js
-// @require        https://cdnjs.cloudflare.com/ajax/libs/lodash.js/0.10.0/lodash.min.js
-// @version        0.6.5
+// @grant          GM_addStyle
+// @version        1.0.0
 // ==/UserScript==
+/* global GM_setValue GM_getValue GM_info GM_addStyle, selected, popUp, show_image_pane, hide_image_pane */
 
-var favs = {};
-var favsString = GM_getValue ("favsJson",  "");
-if(!favsString){
-    favsString = '{' +
-        '"lists": [' +
-        '{' +
-        '"name": "Favorites 10",' +
-        '"galleries": []' +
-        '}' +
-        '],' +
-        '"display": "thumb",' +
-        '"order": "faved"' +
-        '}';
-    GM_setValue ("favsJson", favsString );
-}
-favs = JSON.parse (favsString);
+(async function () {
+  // CONSTANTS
+  const select = query => window.document.querySelector(query)
+  const selectAll = query => window.document.querySelectorAll(query)
+  const urlParams = new URLSearchParams(window.location.search)
 
-for (var i = 0; i < favs["lists"].length; i++) {
-    arr = favs["lists"][i]["galleries"];
-    favs["lists"][i]["galleries"] = arrUnique(arr);
-    GM_setValue ("favsJson", JSON.stringify(favs) );
-}
+  // Magic Numbers
+  const HUEOFFSET = 75
 
-script_log(favs);
-var lists = favs["lists"];
-var last_list_index = [lists.length-1];
-var selected = -1;
-var faved_list;
-var faved_gallery;
-var box_height = 350;
-var fav_select = "";
-var current_gid;
-var current_gt;
-var current_fav;
-var current_page = 0;
-var current_domain = window.location.protocol + '//' + window.location.hostname;
-var display_galleries = [];
-var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  // GLOBALS
+  let importString = ''
 
+  // CLASSES
+  class FavLists {
+    constructor (lists = []) {
+      this._lists = lists
+    }
 
+    get lists () { return this._lists }
 
-if(window.location.hostname == "exhentai.org"){
-    var fav_icon = "background-image:url(https://exhentai.org/img/fav.png); background-position:0px -172px";
-    var image_domain = "https://exhentai.org/img";
-}else{
-    var fav_icon = "background-image:url(http://ehgt.org/g/fav.png); background-position:0px -172px";
-    var image_domain = "http://ehgt.org/g";
-}
+    newList (name = '', id = _ULF.newID(), galleries = []) {
+      console.debug(`new List with name: "${name}" and id: "${id}"`)
+      const index = _ULF.counter++
+      if (!name) {
+        name = `Favorites ${9 + index}`
+      }
+      const list = new FavList(name, id, galleries)
+      this._lists.push(list)
+    }
 
+    removeList (listID) {
+      this._lists.splice(this._lists.findIndex(list => list.id === listID), 1)
+    }
 
-var QueryString = function () {
-    // This function is anonymous, is executed immediately and
-    // the return value is assigned to QueryString!
-    var query_string = {};
-    var query = window.location.search.substring(1);
-    var vars = query.split("&");
-    for (var i=0;i<vars.length;i++) {
-        var pair = vars[i].split("=");
-        // If first entry with this name
-        if (typeof query_string[pair[0]] === "undefined") {
-            query_string[pair[0]] = decodeURIComponent(pair[1]);
-            // If second entry with this name
-        } else if (typeof query_string[pair[0]] === "string") {
-            var arr = [ query_string[pair[0]],decodeURIComponent(pair[1]) ];
-            query_string[pair[0]] = arr;
-            // If third or later entry with this name
+    getListByGid (galleryID) {
+      return this._lists.find(list => list.getGallery(galleryID))
+    }
+
+    getListByLid (listID) {
+      return this._lists.find(list => list.id === listID)
+    }
+
+    toJSON () {
+      return this._lists.map(list => list.toJSON())
+    }
+
+    save () {
+      _ULF.json.lists = this.toJSON()
+      saveGM()
+      console.debug('ULF data saved')
+    }
+  }
+
+  class FavList {
+    constructor (name, id, galleries = []) {
+      this._name = name
+      this._id = id
+      this._galleries = galleries
+    }
+
+    get id () { return this._id }
+    get name () { return this._name }
+    set name (name) {
+      this._name = name
+    }
+
+    galleries (search = false, order = 'favorited', page = 0, count = 200) {
+      let galleries = this._galleries
+      const index = page * count
+      const tags = {
+        artist: [],
+        character: [],
+        female: [],
+        group: [],
+        language: [],
+        male: [],
+        misc: [],
+        parody: [],
+        reclass: []
+      }
+
+      if (search) {
+        const tagsRE = /-?(?:([a-zA-Z]+):)?(".+?\$?"|-?[\w*%$?]+)/g
+
+        let match
+        while (match = tagsRE.exec(search.text)) { // eslint-disable-line no-cond-assign
+          const [str, namespace, tag] = match
+          const include = (str[0] !== '-')
+          const regexString = tag
+          console.debug(tag)
+
+          const regex = new RegExp(regexString.replace(/"/g, '')
+            .replace(/\?/g, '.')
+            .replace(/_/g, '.')
+            .replace(/\*/g, '.*?')
+            .replace(/%/g, '.*?'), 'i')
+
+          switch (namespace) {
+            case 'artist':
+              tags.artist.push({ include, regex })
+              break
+            case 'f':
+              tags.female.push({ include, regex })
+              break
+            case 'female':
+              tags.female.push({ include, regex })
+              break
+            case 'c':
+              tags.character.push({ include, regex })
+              break
+            case 'character':
+              tags.character.push({ include, regex })
+              break
+            case 'g':
+              tags.group.push({ include, regex })
+              break
+            case 'group':
+              tags.group.push({ include, regex })
+              break
+            case 'circle':
+              tags.group.push({ include, regex })
+              break
+            case 'creator':
+              tags.group.push({ include, regex })
+              break
+            case 'l':
+              tags.language.push({ include, regex })
+              break
+            case 'language':
+              tags.language.push({ include, regex })
+              break
+            case 'm':
+              tags.male.push({ include, regex })
+              break
+            case 'male':
+              tags.male.push({ include, regex })
+              break
+            case 'p':
+              tags.parody.push({ include, regex })
+              break
+            case 'parody':
+              tags.parody.push({ include, regex })
+              break
+            case 'series':
+              tags.parody.push({ include, regex })
+              break
+            case 'r':
+              tags.reclass.push({ include, regex })
+              break
+            case 'reclass':
+              tags.reclass.push({ include, regex })
+              break
+            case 'misc':
+              tags.misc.push({ include, regex })
+              break
+            case undefined:
+              tags.misc.push({ include, regex })
+              break
+            default:
+              throw SyntaxError(`namespace '${namespace}' not supported`)
+          }
+        }
+        console.debug(tags)
+
+        const titleMatcher = (include, title, matchedTags = []) => {
+          let match = false
+          if (!(tags.misc.length)) { return false }
+          tags.misc.forEach(tag => {
+            if (include) {
+              if (tag.include && tag.regex.test(title)) {
+                matchedTags.push(tag)
+                match = true
+              }
+            } else {
+              if (!tag.include && tag.regex.test(title)) {
+                matchedTags.push(tag)
+                match = true
+              }
+            }
+          })
+          return match
+        }
+
+        const includeMatcher = (includeTag, includeNamespace, tags) => {
+          if (!includeTag.include) { return true }
+          return tags.some(tag => {
+            const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['misc', tag]
+            if (includeNamespace === 'misc' || includeNamespace === namespace) {
+              return includeTag.regex.test(name)
+            }
+            return false
+          })
+        }
+
+        // get galleries to include
+        console.debug(`galleries before include: ${galleries.length}`)
+        galleries = galleries.filter(gallery => {
+          let show = false
+          const matchedTags = [] // search tags used for notes / title should not be reused for gallery tags
+          if (search.name) {
+            show = (gallery.info.title && titleMatcher(true, gallery.info.title, matchedTags)) ||
+              (gallery.info.title_jpn && titleMatcher(true, gallery.info.title_jpn, matchedTags))
+          }
+          if (search.notes) {
+            show = show || titleMatcher(true, gallery.note, matchedTags)
+          }
+          if (search.tags) {
+            for (const namespace in tags) {
+              show = tags[namespace].every(tag => {
+                return matchedTags.some(mTag => tag.regex === mTag.regex) ||
+                  includeMatcher(tag, namespace, gallery.info.tags)
+              })
+              if (!show) { break }
+            }
+          }
+
+          return show
+        })
+        console.debug(`galleries after include: ${galleries.length}`)
+
+        const excludeMatcher = (string) => {
+          const [namespace, name] = (string.includes(':')) ? string.split(':') : ['misc', string]
+          // check if string matches any tag in same namespace or in misc namespace
+          return (tags[namespace].some(tag => {
+            if (tag.include) { return false }
+            return tag.regex.test(name)
+          })) || (tags.misc.some(tag => {
+            if (tag.include) { return false }
+            return tag.regex.test(name)
+          }))
+        }
+
+        // now check for excludes
+        galleries = galleries.filter(gallery => {
+          if (search.name) {
+            if ((gallery.info.title && titleMatcher(false, gallery.info.title)) ||
+              (gallery.info.title_jpn && titleMatcher(false, gallery.info.title_jpn))) { return false }
+          }
+          if (search.notes) {
+            if (titleMatcher(false, gallery.note)) { return false }
+          }
+          if (search.tags) {
+            if (gallery.info.tags.some(tag => excludeMatcher(tag))) { return false }
+          }
+          return true
+        })
+        console.debug(`galleries after exclude: ${galleries.length}`)
+
+        console.debug(galleries)
+      }
+
+      switch (order) {
+        case 'favorited':
+          galleries.sort((a, b) => {
+            return new Date(b.timestamp) - new Date(a.timestamp)
+          })
+          break
+        case 'posted':
+          galleries.sort((a, b) => {
+            // unix to date: new Date(UNIX_timestamp * 1000);
+            return b.info.posted - a.info.posted
+          })
+          break
+        default:
+          throw SyntaxError('"order" has to be either "posted" or "favorited"')
+      }
+
+      return {
+        galleries: galleries.slice(index, index + count) || null,
+        number: galleries.length || 0,
+        tags: tags
+      }
+    }
+
+    getGallery (id) {
+      return this._galleries.find(gallery => gallery.id === parseInt(id))
+    }
+
+    removeGallery (id) {
+      this._galleries = this._galleries.filter(gallery => gallery.id !== parseInt(id))
+    }
+
+    addGallery (id, token, note = '') {
+      return new Promise((resolve, reject) => {
+        if (!this.getGallery(id)) {
+          try {
+            const gallery = new Gallery(id, token, note)
+            getGalleryInfo([gallery]).then(info => {
+              gallery.info = info[0]
+              this._galleries.push(gallery)
+              resolve('gallery added!')
+            })
+          } catch (error) {
+            // window.InternalError('could not get gallery info!')
+            reject(window.InternalError('could not get gallery info!'))
+          }
         } else {
-            query_string[pair[0]].push(decodeURIComponent(pair[1]));
+          // window.Error('already added to this list!')
+          reject(window.Error('already added to this list!'))
         }
+      })
     }
-    return query_string;
-}();
 
-function script_log(message) {
-    console.log("[Unlimited Fav]:");
-    console.log(message);
-}
-
-function arrUnique(arr) {
-    var cleaned = [];
-    arr.forEach(function(itm) {
-        var unique = true;
-        cleaned.forEach(function(itm2) {
-            if (_.isEqual(itm, itm2)) unique = false;
-        });
-        if (unique)  cleaned.push(itm);
-        else script_log("duplicate found");
-    });
-    return cleaned;
-}
-
-
-function isEven(n) {
-    return n % 2 == 0;
-}
-
-function addUrlParameter (url, value, parameter) {
-    url = url.replace('#','');
-    var param_index = url.indexOf(parameter);
-    if(param_index>-1){
-        var next_param_index = url.indexOf("&", param_index);
-        if(next_param_index == -1) {next_param_index = param_index+parameter.length+value.length;}
-        url = url.split('');
-        url.splice((param_index+parameter.length), (next_param_index), value);
-        url = url.join('');
-    }else{
-        url += parameter + value;
+    toJSON () {
+      return {
+        name: this._name,
+        id: this._id,
+        galleries: this._galleries.map(gallery => gallery.toJSON())
+      }
     }
-    return url;
-}
+  }
 
-function timeConverter(UNIX_timestamp){
-    var a = new Date(UNIX_timestamp * 1000);
-    var year = a.getFullYear();
-    var month = months[a.getMonth()];
-    var date = a.getDate();
-    var hour = a.getHours();
-    var min = a.getMinutes() < 10 ? '0' + a.getMinutes() : a.getMinutes(); var sec = a.getSeconds() < 10 ? '0' + a.getSeconds() : a.getSeconds();
-    var time = year + '-' + month + '-' + date + ' ' + hour + ':' + min;
-    return time;
-}
-
-function addZero(i) {
-    if (i < 10) {
-        i = "0" + i;
+  class Gallery {
+    constructor (id, token, note = '', timestamp = new Date(), info = false) {
+      this._id = parseInt(id)
+      this._token = token
+      this._note = note
+      this._timestamp = timestamp
+      this._info = info
     }
-    return i;
-}
 
-
-if (favs["lists"].length === 0){
-    script_log("creating new list");
-    favs["lists"].push({"name": "Favorites " + (favs["lists"].length + 10), "galleries" : []});
-    lists = favs["lists"];
-    last_list_index = [lists.length-1];
-    GM_setValue ("favsJson", JSON.stringify(favs) );
-}
-
-/*
-if( favs["lists"][last_list_index]["galleries"].length > 0){
-	script_log("creating new list");
-	favs["lists"].push({"name": "Favorites " + (favs["lists"].length + 10), "galleries" : []});
-	lists = favs["lists"];
-	last_list_index = [lists.length-1];
-	GM_setValue ("favsJson", JSON.stringify(favs) );
-}
-*/
-
-if(window.location.pathname.includes("/g/")) {
-    re = /\/g\/(\S+)\/(\S+)\//i;
-    str = window.location.pathname;
-    m = str.match(re);
-    if (m) {
-        current_gid = m[1];
-        current_gt = m[2];
+    toJSON () {
+      return {
+        gid: this._id,
+        gt: this._token,
+        note: this._note,
+        timestamp: this._timestamp,
+        info: this._info
+      }
     }
-    script_log(current_gid);
-    script_log(current_gt);
-    for (var i = 0; i < favs["lists"].length; i++) {
-        for (var j = 0; j < favs["lists"][i]["galleries"].length; j++) {
-            if(favs["lists"][i]["galleries"][j]["gid"] == current_gid && favs["lists"][i]["galleries"][j]["gt"] == current_gt){
-                $("#favoritelink").html(favs["lists"][i]["name"]);
-                $("#favoritelink").parent().prepend('<div style="float:left; cursor:pointer" id="fav"><div class="i" style="'+ fav_icon + '" title="' + favs["lists"][i]["name"] + '"></div></div>');
-            }
-        }
+
+    get id () { return this._id }
+    get token () { return this._token }
+    get note () { return this._note }
+    set note (note) { this._note = note }
+    get timestamp () { return this._timestamp }
+    get info () { return this._info }
+    set info (info) { this._info = info }
+  }
+
+  // FUNCTIONS
+  function parser (html) {
+    const template = document.createElement('template')
+    template.innerHTML = html
+    return template.content.firstElementChild
+  }
+
+  // SCRIPT INITIALIZATION
+  function createLists () {
+    const lists = _ULF.json.lists.map(list => {
+      _ULF.counter++
+      return new FavList(list.name,
+        list.id,
+        list.galleries.map(gallery => new Gallery(gallery.gid,
+          gallery.gt,
+          gallery.note,
+          gallery.timestamp,
+          gallery.info)))
+    })
+    return new FavLists(lists)
+  }
+
+  // LOAD SCRIPT
+  const _ULF = {
+    json: loadGM(),
+    counter: 0,
+    newID: () => { return '_' + Math.random().toString(36).substr(2, 9) }
+  }
+  _ULF.dict = createLists()
+  console.log(_ULF)
+  saveGM()
+
+  // USERSCRIPT SPECIFIC
+  function clearFavs () {
+    _ULF.json = {}
+    saveGM()
+    window.location.reload()
+  }
+  // save settings persistently
+  function saveGM () {
+    // save value to greasemonkey/tampermonkey etc.
+    GM_setValue('__unlimitedfavs__', JSON.stringify(_ULF.json))
+  }
+
+  // load persistently saved settings, or from a given JSON string
+  function loadGM (importString) {
+    const GMString = String(importString || GM_getValue('__unlimitedfavs__', ''))
+    // set default if no import and no saved version
+    const defaultValue = {
+      lists: [{
+        name: 'Favorites 11',
+        id: '_' + Math.random().toString(36).substr(2, 9),
+        galleries: []
+      }],
+      version: GM_info.script.version
     }
-}
+    try {
+      const GMJSON = (GMString && GMString !== '{}') ? JSON.parse(GMString) : defaultValue
+      console.debug(GMJSON)
 
-if(window.location.pathname.includes("favorites.php")) {
-    current_fav = QueryString.favcat;
-    if(QueryString.page){
-        page = QueryString.page;
-    }else{
-        page = -1;
+      // VERSION ADJUSTMENTS
+      if (!GMJSON.version) {
+        GMJSON.version = '0.6.5'
+      }
+
+      // Allow to backup before doing any other changes to the user data
+      if (versionCompare(String(GMJSON.version), GM_info.script.version) === -1) {
+        // only backup on major version change
+        const oldMajor = parseInt(GMJSON.version.split('.')[1])
+        const newMajor = parseInt(GM_info.script.version.split('.')[1])
+        if (oldMajor !== newMajor) {
+          const confirmation = window.confirm(`Unlimited Favorites has been updated to version ${GM_info.script.version}, ` +
+          'do you want to create a backup before updating your data?\n' +
+          `see what's new here: https://github.com/ZerataX/unlimted_favorites/releases/tag/${GM_info.script.version}`)
+          if (confirmation) {
+            const fileName = 'unl_favs_' + new Date().toISOString() + '.json'
+            download(JSON.stringify(GMJSON), fileName, 'text/json')
+          }
+        }
+      }
+
+      if (versionCompare(String(GMJSON.version), '0.7.0') === -1) {
+        // fix saved JSONs from < 0.7.0 versions
+        // id from string to int
+        for (const list of GMJSON.lists) {
+          for (const gallery of list.galleries) {
+            gallery.gid = parseInt(gallery.gid)
+          }
+        }
+      }
+
+      if (versionCompare(String(GMJSON.version), '0.8.0') === -1) {
+      // fix saved JSONs from < 0.8.0 versions
+      // rename date to timestamp
+        for (const list of GMJSON.lists) {
+          list.id = '_' + Math.random().toString(36).substr(2, 9)
+          for (const gallery of list.galleries) {
+            gallery.timestamp = gallery.date
+            delete gallery.date
+          }
+        }
+        delete GMJSON.display
+        delete GMJSON.order
+      }
+
+      // update version
+      GMJSON.version = GM_info.script.version
+
+      return GMJSON
+    } catch {
+      window.alert('something went wrong trying to parse your settings, please download your settings and create an issue them attachedd here: https://github.com/ZerataX/unlimted_favorites/issues/new')
+      const fileName = 'unl_favs_' + new Date().toISOString() + '.json'
+      download(GMString, fileName, 'text/json')
+      return defaultValue
     }
-    if(QueryString.unlpage){
-        current_page = QueryString.unlpage;
-    }else{
-        current_page = 0;
+  }
+
+  // SADPANDA API
+  function handleErrors (response) {
+    if (!response.ok || response.statux === 200) {
+      throw Error(response.statusText)
     }
-    if(current_fav > 9){
-        if(page < 9999){
-            window.open(addUrlParameter(window.location.href,9999, "&page="),"_self");
-        }
-        if($("div p").text()=="No hits found" && (favs["lists"][current_fav-10]["galleries"].length-(current_page*25))>0){
-            visible_galleries = ((current_page*25)+25);
-            var previous_page = (parseInt(current_page)-1);
-            if(previous_page<0){previous_page = 0;}
-            var next_page = (parseInt(current_page)+1);
-            if(next_page > Math.ceil((favs["lists"][current_fav-10]["galleries"].length)/25)-1){
-                next_page = Math.ceil((favs["lists"][current_fav-10]["galleries"].length)/25)-1;
-                visible_galleries = favs["lists"][current_fav-10]["galleries"].length;
-            }
-            $("div p").replaceWith('<p class="ip" style="margin-top:5px">Showing '+ ((current_page*25)+1) +'-'+  visible_galleries +' of ' + favs["lists"][current_fav-10]["galleries"].length + '</p>');
-            $("div p").after('<table class="ptt" style="margin:2px auto 0px"><tbody><tr><td class="ptdd">&lt;</td><td class="ptds"><a href="" onclick="return false">1</a></td><td class="ptdd">&gt;</td></tr></tbody></table>');
-            var option_2 = `<a class="display" href="#" rel="nofollow">Show List</a>`;
-            var option_1 = `<span style="font-weight:bold">Thumbnails</span>`;
-            var option_3 = `<span style="font-weight:bold">Favorited</span>`;
-            var option_4 = `<a class="order" href="#"rel="nofollow">Use Posted</a>`;
-            var option_5 = `<a class="order" href="#">Published</a>`;
-            var option_6 = "Favorited";
-            var display = "thumb";
-            if (favs["order"]=="posted") {
-                option_5 = "Published"; option_6 = `<a class="order" href="#">Favorited</a>`;
-                option_4 = `<a class="order" href="#"rel="nofollow">Use Favorited</a>`;option_3 = `<span style="font-weight:bold">Posted</span>`;
-                favs["lists"][current_fav-10]["galleries"].sort(function(a, b) {
-                    a = a["info"]["posted"];
-                    b = b["info"]["posted"];
-                    return b-a;
-                });
-            }else{
-                favs["lists"][current_fav-10]["galleries"].sort(function(a, b) {
-                    a = a["date"];
-                    b = b["date"];
-                    return a>b ? -1 : a<b ? 1 : 0;
-                });
-            }
-            if (favs["display"] =="list") {
-                display = "list"; option_1 = `<span style="font-weight:bold">Show List</span>`; option_2 = `<a class="display" href="#" rel="nofollow">Thumbnails</a>`;
-            }
-            var fav_options = "";
-            for (var j = 0; j < favs["lists"].length; j++) {
-                fav_options += `<option style="height:15px; padding-left:20px; padding-top:4px; background-image:url(`+image_domain+`/fav.png); background-repeat:no-repeat; background-position:2px -172px" value="fav` + (j+10) + `">`+ favs["lists"][j]["name"]+`</option>`;
-            }
-            $("table").last().after(`<form name="favform" action="" method="post" style="margin:0"><div style="float:left; width:380px; position:relative; text-align:left"><div style="position:absolute; top:-18px; left:15px">Display: &nbsp;` + option_1 + ` &nbsp; [` + option_2 + `] &nbsp; &nbsp;Order: &nbsp;` + option_3 + ` &nbsp; [` + option_4 + `]</div></div><div style="position:relative; width:100%; clear:both"><div style="float:right; width:300px; position:relative; text-align:right"><div style="position:absolute; top:-30px; left:70px">Action:<select class="stdinput" name="ddact" style="height:21px; margin-left:13px; padding-left:10px; width:170px; background-repeat:no-repeat; background-image:url(`+image_domain+`/fav.png); background-position:4px 20px" onchange="update_favsel(this)"><option value="delete" selected="selected" style="height:17px; padding-left:10px; padding-top:4px">Remove from Favorites</option><optgroup label="Change Favorite Category" style="padding:3px 5px 5px 5px"><option style="height:15px; padding-left:20px; padding-top:4px; background-image:url(`+image_domain+`/fav.png); background-repeat:no-repeat; background-position:2px 1px" value="fav0">good stuff</option><option style="height:15px; padding-left:20px; padding-top:4px; background-image:url(`+image_domain+`/fav.png); background-repeat:no-repeat; background-position:2px -18px" value="fav1">absolute best</option><option style="height:15px; padding-left:20px; padding-top:4px; background-image:url(` + image_domain + `/fav.png); background-repeat:no-repeat; background-position:2px -37px" value="fav2">Favorites 2</option><option style="height:15px; padding-left:20px; padding-top:4px; background-image:url(`+image_domain+`/fav.png); background-repeat:no-repeat; background-position:2px -56px" value="fav3">Favorites 3</option><option style="height:15px; padding-left:20px; padding-top:4px; background-image:url(`+image_domain+`/fav.png); background-repeat:no-repeat; background-position:2px -75px" value="fav4">Favorites 4</option><option style="height:15px; padding-left:20px; padding-top:4px; background-image:url(`+image_domain+`/fav.png); background-repeat:no-repeat; background-position:2px -94px" value="fav5">Favorites 5</option><option style="height:15px; padding-left:20px; padding-top:4px; background-image:url(`+image_domain+`/fav.png); background-repeat:no-repeat; background-position:2px -113px" value="fav6">Favorites 6</option><option style="height:15px; padding-left:20px; padding-top:4px; background-image:url(`+image_domain+`/fav.png); background-repeat:no-repeat; background-position:2px -132px" value="fav7">Favorites 7</option><option style="height:15px; padding-left:20px; padding-top:4px; background-image:url(`+image_domain+`/fav.png); background-repeat:no-repeat; background-position:2px -151px" value="fav8">Favorites 8</option><option style="height:15px; padding-left:20px; padding-top:4px; background-image:url(`+ image_domain + `/fav.png); background-repeat:no-repeat; background-position:2px -170px" value="fav9">Favorites 9</option>` + fav_options+ `</optgroup></select></div></div><div style="clear:both"></div></div><div class="itg"><div class="c"></div></div><table class="ptb" style="margin:0px auto 10px"><tbody><tr><td class="ptdd">&lt;</td><td class="ptds"><a href="` + current_domain + `/favorites.php?favcat=` + current_fav + `" onclick="return false">1</a></td><td class="ptdd">&gt;</td></tr></tbody></table><div style="position:relative; width:100%; clear:both"><div style="float:right; width:100px; position:relative"><div style="position:absolute; top:-28px; left:43px"><input type="button" name="apply" value="Apply" class="stdbtn fav"></div></div><div style="clear:both"></div></div></form>`);
-            if(display == "list"){
-                $(".itg").append(`<tbody><tr><th style="width:92px">&nbsp;</th><th style="width:89px">` + option_5 + `</th><th style="min-width:610px">Name</th><th style="width:89px">` + option_6 + `</th><th style="width:34px; text-align:center"><input id="alltoggle" type="checkbox" onclick="toggle_all()"></th></tr></tbody>`);
-            }
-        }
+    return response
+  }
 
-        if(favs["lists"][current_fav-10]["galleries"].length > 25){
-            $("tr").first().html('<td onclick="document.location=this.firstChild.href"><a href="' + addUrlParameter(window.location.href,previous_page, "&unlpage=") + '" onclick="return false; location.reload();">&lt;</a></td>');
-            $("tr").last().html('<td onclick="document.location=this.firstChild.href"><a href="' + addUrlParameter(window.location.href,previous_page, "&unlpage=") + '" onclick="return false; location.reload();">&lt;</a></td>');
-            for (var j = 0; j < Math.ceil((favs["lists"][current_fav-10]["galleries"].length)/25); j++) {
-                if(j == current_page){
-                    $("tr").first().append('<td class="ptds"><a href="' + window.location.href + '" onclick="return false">' + (j+1) + '</a></td>');
-                    $("tr").last().append('<td class="ptds"><a href="' + window.location.href + '" onclick="return false">' + (j+1) + '</a></td>');
+  async function getGalleryInfo (galleries) {
+    // [' + id +', "' + token + '" ]
+    const request = new window.Request('https://e-hentai.org/api.php',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          method: 'gdata',
+          gidlist: galleries.map(gallery => [parseInt(gallery.id), gallery.token]),
+          namespace: 1
+        })
+      })
+    return window.fetch(request)
+      .then(handleErrors)
+      .then(response => response.json())
+      .then(json => json.gmetadata)
+      .catch(error => {
+        console.error(error)
+      })
+  }
 
-                }else{
-                    $("tr").first().append('<td onclick="document.location=this.firstChild.href"><a href="' + addUrlParameter(window.location.href,j, "&unlpage=") + '" onclick="return false; location.reload();">' + (j+1) + '</a></td>');
-                    $("tr").last().append('<td onclick="document.location=this.firstChild.href"><a href="' + addUrlParameter(window.location.href,j, "&unlpage=") + '" onclick="return false; location.reload();">' + (j+1) + '</a></td>');
+  Promise.eachLimit = async (funcs, limit, ms) => {
+    const rest = funcs.slice(limit)
+    await Promise.all(funcs.slice(0, limit).map(async func => {
+      await func()
+      while (rest.length) {
+        try {
+          await sleep(ms).then(() => rest.shift()())
+        } catch (TypeError) {}
+      }
+    }))
+  }
 
-                }
-            }
-            $("tr").first().append('<td onclick="document.location=this.firstChild.href"><a href="'+ addUrlParameter(window.location.href,next_page, "&unlpage=") + '" onclick="return false; location.reload();">&gt;</a></td>');
-            $("tr").last().append('<td onclick="document.location=this.firstChild.href"><a href="'+ addUrlParameter(window.location.href,next_page, "&unlpage=") + '" onclick="return false; location.reload();">&gt;</a></td>');
+  // download file to local storage
+  function download (text, name, type) {
+    const a = document.createElement('a')
+    const file = new window.Blob([text], { type: type })
+    a.href = URL.createObjectURL(file)
+    a.download = name
+    a.click()
+  }
 
-        }
-        $(".fp.fps").removeClass("fps");
-        $(".id1").remove();
-        for (var j = (current_page*25); j < favs["lists"][current_fav-10]["galleries"].length; j++) {
-            display_galleries[j] = [parseInt(favs["lists"][current_fav-10]["galleries"][j]["gid"]), '"' + favs["lists"][current_fav-10]["galleries"][j]["gt"] + '"' ];
-            if(j == (current_page*25)+24){
-                break;
-            }
-        }
-        var gidlist = "[" + display_galleries[(current_page*25)] + "]";
-        for (var j = (current_page*25)+1; j < display_galleries.length; j++) {
-            gidlist += ",[" + display_galleries[j] + "]";
-        }
+  // based on: https://stackoverflow.com/a/6078873
+  function timeConverter (epoch) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const a = new Date(epoch * 1000)
+    const year = a.getFullYear()
+    const month = months[a.getMonth()]
+    const date = a.getDate()
+    const hour = a.getHours()
+    const min = a.getMinutes() < 10 ? '0' + a.getMinutes() : a.getMinutes()
+    // const sec = a.getSeconds() < 10 ? '0' + a.getSeconds() : a.getSeconds()
+    const time = year + '-' + month + '-' + date + ' ' + hour + ':' + min
 
-        var sadpandaRequest = '{  "method": "gdata",  "gidlist": [' + gidlist +']}';
-        var sadpandaInfo;
-        var ret = GM_xmlhttpRequest({
-            method: "POST",
-            data: sadpandaRequest,
-            url: "https://e-hentai.org/api.php",
-            onload: function(res) {
+    return time
+  }
 
-                sadpandaInfo = JSON.parse(res.responseText);
-                script_log(sadpandaInfo);
-                for (var j = (current_page*25); j < favs["lists"][current_fav-10]["galleries"].length; j++) {
-                    var rate_offset = [0, 0];
-                    rate_offset[1] = (80-Math.round(sadpandaInfo["gmetadata"][j-(current_page*25)]["rating"])*16)*-1;
-                    if((Math.round(sadpandaInfo["gmetadata"][j-(current_page*25)]["rating"])-Math.floor(sadpandaInfo["gmetadata"][j-(current_page*25)]["rating"]))==0) {
-                        rate_offset[0] = -20;
-                        rate_offset[1] += 16;
+  // based on: https://gist.github.com/alexey-bass/1115557
+  function versionCompare (left, right) {
+    if (typeof left + typeof right !== 'stringstring') { return false }
 
-                    }
-                    var rate_thumb = '<div class="id43 ir" style="background-position:'+rate_offset[1]+'px '+rate_offset[0]+'px; opacity:0.93333333333333; margin-top:2px"></div>';
-                    var rate_list = '<div class="ir it4r" style="background-position:'+rate_offset[1]+'px '+rate_offset[0]+'px; opacity:1"></div>';
-                    if(display == "thumb"){
-                        $(".itg").append(`<div class="id1" style="height:335px"><div class="id2"><a href="`+ current_domain + `/g/` + favs["lists"][current_fav-10]["galleries"][j]["gid"]+ `/` + favs["lists"][current_fav-10]["galleries"][j]["gt"]+ `/">` + sadpandaInfo["gmetadata"][j-(current_page*25)]["title"] +`</a></div><div class="id3" style="height:280px"><a href="`+ current_domain + `/g/` + favs["lists"][current_fav-10]["galleries"][j]["gid"]+ `/` + favs["lists"][current_fav-10]["galleries"][j]["gt"]+ `/"><img src="` + sadpandaInfo["gmetadata"][j-(current_page*25)]["thumb"] +`" alt="Free Hentai Doujinshi Gallery ` + sadpandaInfo["gmetadata"][j-(current_page*25)]["title"] + `" title="` + sadpandaInfo["gmetadata"][j-(current_page*25)]["title"] + `" style="position:relative; top:-3px"></a></div><div class="id4"><div class="id41" style="background-position:0 -35px" title="` + sadpandaInfo["gmetadata"][j-(current_page*25)]["category"] + `"></div><div class="id42">26 files</div>`+rate_thumb+`<div class="id44"><div style="float:right"><div onclick="return popUp('`+ current_domain + `/gallerypopups.php?gid=` + favs["lists"][current_fav-10]["galleries"][j]["gid"]+ `&amp;t=` + favs["lists"][current_fav-10]["galleries"][j]["gt"]+ `&amp;act=addfav',675,415)" class="i" id="favicon_` + favs["lists"][current_fav-10]["galleries"][j]["gid"]+ `" style="` + fav_icon + `; cursor:pointer; margin:5px 3px 0" title="` + favs["lists"][current_fav-10]["name"]+ `"></div><input type="checkbox" name="modifygids[]" value="` + favs["lists"][current_fav-10]["galleries"][j]["gid"]+ `" style="position:relative; top:3px; left:-1px"></div></div></div></div>`);
-                    }
-                    if(display == "list"){
-                        var date = new Date(favs["lists"][current_fav-10]["galleries"][j]["date"]);
-                        var minute = addZero(date.getMinutes());
-                        var hour = date.getHours();
-                        var day = date.getDate();
-                        var monthIndex = months[date.getMonth()];
-                        var year = date.getFullYear();
-                        if(isEven(j)){
-                            color = 1;
-                        }else{
-                            color = 0;
-                        }
-                        var download_button="";
-                        if(sadpandaInfo["gmetadata"][j-(current_page*25)]["torrentcount"]>0){
-                            download_button = `<div class="i"><a href="`+current_domain+`/gallerytorrents.php?gid=` + favs["lists"][current_fav-10]["galleries"][j]["gid"]+ `&amp;t=` + favs["lists"][current_fav-10]["galleries"][j]["gt"]+ `" onclick="return popUp('`+current_domain+`/gallerytorrents.php?gid=` + favs["lists"][current_fav-10]["galleries"][j]["gid"]+ `&amp;t=` + favs["lists"][current_fav-10]["galleries"][j]["gt"]+ `', 610, 590)" rel="nofollow"><img src="`+image_domain+ `/t.png" class="n" alt="T" title="Torrents exist for this gallery"></a></div>`;
-                        }
-                        var note_field = ``;
-                        if (favs["lists"][current_fav-10]["galleries"][j]["note"]){
-                            var note= "Note: " + favs["lists"][current_fav-10]["galleries"][j]["note"];
-                            note_field = `<div style="font-style:italic; clear:both; padding:3px 0 1px 5px; display:" id="favnote_` + sadpandaInfo["gmetadata"][j-(current_page*25)]["gid"] + `">`+note+`</div>`;
-                        }
-                        var thumb_img = $(".unl.fav.thumb");
-                        var category_color;
-                        switch (sadpandaInfo["gmetadata"][j-(current_page*25)]["category"].toLowerCase()) {
-                            case "doujinshi":
-                                category_color = "rgb(255, 0, 0)";
-                                break;
-                            case "game cg sets":
-                                category_color = "rgb(0, 128, 0)";
-                                break;
-                            case "non-h":
-                                category_color = "#16FFFC";
-                                break;
-                            case "manga":
-                                category_color = "#FFA500";
-                                break;
-                            case "artist cg sets":
-                                category_color = "#FFFF00";
-                                break;
-                            case "asian porn":
-                                category_color = "rgb(238, 130, 238)";
-                                break;
-                            case "image sets":
-                                category_color = "rgb(0, 0, 255)";
-                                break;
-                            case "western":
-                                category_color = "rgb(137, 255, 22)";
-                                break;
-                            case "cosplay":
-                                category_color = "#4B0082";
-                                break;
-                            case "misc":
-                                category_color = "#000000";
-                                break;
-                        }
-                        $("tbody").eq(1).append(`<tr class="gtr`+color+` color`+color+`"><td class="itdc"><img src="` + image_domain + `/c/`+  sadpandaInfo["gmetadata"][j-(current_page*25)]["category"].toLowerCase().replace("image sets","imageset").replace(" sets", "").replace(" ", "")+`.png" alt="` + sadpandaInfo["gmetadata"][j-(current_page*25)]["category"] + `" class="ic"></td><td class="itd" style="white-space:nowrap">` + timeConverter(sadpandaInfo["gmetadata"][j-(current_page*25)]["posted"]) + `</td><td class="itd"><div style="position:relative"><div class="it2" id="i` + sadpandaInfo["gmetadata"][j-(current_page*25)]["gid"] + `" style="border: 2px solid rgb(255, 0, 0); top: -52.5px; left: -216px; height: 101px; width: 200px; visibility: hidden;"><img class="unl fav thumb" src="` + sadpandaInfo["gmetadata"][j-(current_page*25)]["thumb"] + `" alt="` + sadpandaInfo["gmetadata"][j-(current_page*25)]["title"] +`" style="margin:0"></div><div class="it3"><div onclick="return popUp('` + current_domain + `/gallerypopups.php?gid=` + sadpandaInfo["gmetadata"][j-(current_page*25)]["gid"] + `&amp;t=` + sadpandaInfo["gmetadata"][j-(current_page*25)]["token"] +`&amp;act=addfav',675,415)" class="i" id="favicon_` + sadpandaInfo["gmetadata"][j-(current_page*25)]["gid"] + `" style="` + fav_icon + `; cursor:pointer" title="` + favs["lists"][current_fav-10]["name"] + `"></div>`+download_button+`</div><div class="it5"><a href="`+ current_domain + `/g/` + favs["lists"][current_fav-10]["galleries"][j]["gid"]+ `/` + favs["lists"][current_fav-10]["galleries"][j]["gt"]+ `" onmouseover="show_image_pane(` + favs["lists"][current_fav-10]["galleries"][j]["gid"] + `)" onmouseout="hide_image_pane(` + favs["lists"][current_fav-10]["galleries"][j]["gid"] + `)">` + sadpandaInfo["gmetadata"][j-(current_page*25)]["title"] + `</a></div><div class="it4">`+rate_list+`</div></div>`+note_field+`</td><td class="itd" style="white-space:nowrap">` + year +`-`+monthIndex+`-`+day + ` ` + hour +`:` + minute +`</td><td style="text-align:center"><input class="inp unlfav" type="checkbox" " name="modifygids[]" value="` +  favs["lists"][current_fav-10]["galleries"][j]["gid"] + `"></td></tr>`);
-                        $("#i"+favs["lists"][current_fav-10]["galleries"][j]["gid"]).attr("style", "border: 2px solid "+category_color+"; top: -52.5px; left: -216px; height: "+thumb_img.clientHeight+"px; width: "+thumb_img.clientWidth+"px; visibility: hidden;");
+    const a = left.split('.')
+    const b = right.split('.')
+    let i = 0; const len = Math.max(a.length, b.length)
 
-                    }
-                    if(j ==  (current_page*25)+24){
-                        break;
-                    }
-                }
-            }
-        });
-
+    for (; i < len; i++) {
+      if ((a[i] && !b[i] && parseInt(a[i]) > 0) || (parseInt(a[i]) > parseInt(b[i]))) {
+        return 1
+      } else if ((b[i] && !a[i] && parseInt(b[i]) > 0) || (parseInt(a[i]) < parseInt(b[i]))) {
+        return -1
+      }
     }
-    for (var i = 0; i < favs["lists"].length; i++) {
-        if(current_fav ==(i+10)){ fav_select = "fps"; }else{ fav_select = "";}
-        $(".nosel").children().eq(-3).after(`<div class="fp ` + fav_select + `" onclick="document.location='`+ current_domain + `/favorites.php?favcat=`  + (i+10) +`'" style="width:160px; padding:2px 0 0; float:left">` +
-                                            `<div style="font-weight:bold; float:left; text-align:right; width:30px; height:20px; padding:2px 3px 0 0">` +  favs["lists"][i]["galleries"].length + `</div>` +
-                                            `<div class="i" style="` + fav_icon + `; position:relative; top:1px" title="` +  favs["lists"][i]["name"] + `"></div>` +
-                                            `<div style="float:left; text-align:left; height:20px; padding:2px 0 0 3px">` +  favs["lists"][i]["name"] + `</div>` +
-                                            `</div>`);
+
+    return 0
+  }
+
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+  // UI-MODIFICATIONS
+  // create list name input to rename/delete/add list
+  function getLargeThumbnail (url) {
+    // from: https://ehgt.org/ec/d6/ecd610aa9bc328660cdedfb7ba0200b80962e3b6-3994778-805-1240-png_l.jpg
+    // to: //ehgt.org/t/ec/d6/ecd610aa9bc328660cdedfb7ba0200b80962e3b6-3994778-805-1240-png_250.jpg
+
+    // from: https://exhentai.org/t/8b/d3/8bd3813abf795a744596201ddd7bb162ec95a86d-4438498-2400-3300-jpg_l.jpg
+    // to: //ehgt.org/t/8b/d3/8bd3813abf795a744596201ddd7bb162ec95a86d-4438498-2400-3300-jpg_250.jpg
+
+    return '//ehgt.org//t/' + url.split('/').slice(3).join('/').replace('_l', '_250')
+  }
+
+  function getRatingStyle (rating) {
+    // not entirely correct
+    const ratingOffset = [0, 0]
+    ratingOffset[1] = (80 - Math.round(rating) * 16) * -1
+    if ((Math.round(rating) - Math.floor(rating)) === 0) {
+      ratingOffset[0] = -20
+      ratingOffset[1] += 16
     }
-}
+    return `background-position:${ratingOffset[1]}px ${ratingOffset[0]}px;opacity:1`
+  }
 
-if(!window.location.pathname.includes("/g/") && !window.location.pathname.includes(".php")) {
+  function getCategoryClass (category) {
+    switch (category) {
+      case 'Misc':
+        return 'ct1'
+      case 'Doujinshi':
+        return 'ct2'
+      case 'Manga':
+        return 'ct3'
+      case 'Artist CG':
+        return 'ct4'
+      case 'Artist CG Sets':
+        return 'ct4'
+      case 'Game CG':
+        return 'ct5'
+      case 'Image Set':
+        return 'ct6'
+      case 'Cosplay':
+        return 'ct7'
+      case 'Asian Porn':
+        return 'ct8'
+      case 'Non-H':
+        return 'ct9'
+      case 'Western':
+        return 'cta'
+      default:
+        throw window.InternalError(`category type '${category}' not supported!`)
+    }
+  }
 
-    for (var i = 0; i < favs["lists"].length; i++) {
-        for (var j = 0; j < favs["lists"][i]["galleries"].length; j++) {
-            var thumb = favs["lists"][i]["galleries"][j]["info"]["thumb"].replace("https://exhentai.org" ,"").replace("http://ehgt.org/" ,"");
-            if($("#dmi").find("a").text() == "Show Thumbnails") {
-                script_log($('a[href="' + current_domain + '/g/' + favs["lists"][i]["galleries"][j]["gid"] + '/' + favs["lists"][i]["galleries"][j]["gt"] + '/' +'"]').length);
-                if($('a[href="' + current_domain + '/g/' + favs["lists"][i]["galleries"][j]["gid"] + '/' + favs["lists"][i]["galleries"][j]["gt"] + '/' +'"]').length){
-                    $('a[href="' + current_domain + '/g/' + favs["lists"][i]["galleries"][j]["gid"] + '/' + favs["lists"][i]["galleries"][j]["gt"] + '/' +'"]').first().parent().parent().find(".it3").append(`<div onclick="return popUp('https://e-hentai.org/gallerypopups.php?gid=` + favs["lists"][i]["galleries"][j]["gid"] + `&amp;t=` + favs["lists"][i]["galleries"][j]["gt"] + `&amp;act=addfav',675,415)" class="i" id="favicon_`+ favs["lists"][i]["galleries"][j]["gid"] +`" style="` + fav_icon + `; cursor:pointer;" title="` + favs["lists"][i]["name"] + `"></div>`);
-                }else{
+  let inputcounter = 0
+  function newInput (name, id, template, counter, last = false) {
+    const selection = template.cloneNode(true)
+    const input = selection.lastElementChild.lastElementChild
 
-                    $('div:contains("' + thumb + '")').last().parent().parent().find(".it3").append(`<div onclick="return popUp('https://e-hentai.org/gallerypopups.php?gid=` + favs["lists"][i]["galleries"][j]["gid"] + `&amp;t=` + favs["lists"][i]["galleries"][j]["gt"] + `&amp;act=addfav',675,415)" class="i" id="favicon_`+ favs["lists"][i]["galleries"][j]["gid"] +`" style="` + fav_icon + `; cursor:pointer;" title="` + favs["lists"][i]["name"] + `"></div>`);
-                }
-            }else{
-                if($('a[href="' + current_domain + '/g/' + favs["lists"][i]["galleries"][j]["gid"] + '/' + favs["lists"][i]["galleries"][j]["gt"] + '/' +'"]').length){
-                    $('a[href="' + current_domain + '/g/' + favs["lists"][i]["galleries"][j]["gid"] + '/' + favs["lists"][i]["galleries"][j]["gt"] + '/' +'"]').first().parent().parent().find(".id44").children().first().append(`<div onclick="return popUp('https://e-hentai.org/gallerypopups.php?gid=` + favs["lists"][i]["galleries"][j]["gid"] + `&amp;t=` + favs["lists"][i]["galleries"][j]["gt"] + `&amp;act=addfav',675,415)" class="i" id="favicon_`+ favs["lists"][i]["galleries"][j]["gid"] +`" style="` + fav_icon + `; cursor:pointer;  margin:5px 3px 0" title="` + favs["lists"][i]["name"] + `"></div>`);
-                }else{
-                    $('img[src*="'+ thumb +'"]').first().parent().parent().parent().find(".id44").children().first().append(`<div onclick="return popUp('https://e-hentai.org/gallerypopups.php?gid=` + favs["lists"][i]["galleries"][j]["gid"] + `&amp;t=` + favs["lists"][i]["galleries"][j]["gt"] + `&amp;act=addfav',675,415)" class="i" id="favicon_`+ favs["lists"][i]["galleries"][j]["gid"] +`" style="` + fav_icon + `; cursor:pointer;  margin:5px 3px 0" title="` + favs["lists"][i]["name"] + `"></div>`);
-                }
+    input.name = `favorite_${10 + counter}`
+    input.placeholder = 'new list...'
+    input.setAttribute('lid', id)
+    input.value = name
+    input.classList.add('ulf', 'ulf_list_rename')
+
+    input.addEventListener('focusout', event => clickDeleteList(event.srcElement))
+    if (last) {
+      input.id = 'ulf_last_input'
+      input.addEventListener('focusout', event => clickAddList(event.srcElement))
+    }
+
+    selection.querySelector('.i').style.filter = `invert(100%) hue-rotate(${inputcounter * HUEOFFSET}deg)`
+    inputcounter++
+
+    return selection
+  }
+
+  function newItem (list, template, checked) {
+    const selection = template.cloneNode(true)
+    const counterDIV = selection.firstElementChild
+    const nameDIV = selection.lastElementChild
+
+    counterDIV.innerHTML = list._galleries.length
+    nameDIV.innerHTML = list.name
+    selection.onclick = () => { window.document.location = `/favorites.php?favcat=0&page=0&lid=${list.id}&ulfpage=0` }
+    selection.querySelector('.i').style.filter = `invert(100%) hue-rotate(${inputcounter * HUEOFFSET}deg)`
+    if (checked) {
+      selection.classList.add('fps')
+    } else {
+      selection.classList.remove('fps')
+    }
+    inputcounter++
+
+    return selection
+  }
+
+  function newExtended (gallery, template, tags = false) {
+    const selection = template.cloneNode(true)
+    const image = selection.querySelector('img')
+    const title = selection.querySelector('.glink')
+    const category = selection.querySelector('.gl3e')
+    const categoryTitle = category.children[0]
+    const dateUploaded = category.children[1]
+    const rating = category.children[2]
+    const uploader = category.children[3].firstElementChild
+    const pageCounter = category.children[4]
+    const torrent = category.children[5]
+    const dateFavorited = category.children[6].lastElementChild
+    const tagsSection = selection.querySelector('.gl3e').nextElementSibling
+    const note = selection.querySelector('.glfnote')
+    const checkbox = selection.querySelector('input[name="modifygids[]"]')
+
+    image.src = getLargeThumbnail(gallery.info.thumb)
+    image.alt = gallery.info.title || gallery.info.title_jpn
+    image.title = gallery.info.title || gallery.info.title_jpn
+    title.innerHTML = gallery.info.title || gallery.info.title_jpn
+    dateUploaded.innerHTML = timeConverter(gallery.info.posted)
+    dateUploaded.onclick = () => popUp(`/gallerypopups.php?gid=${gallery.id}&t=${gallery.token}&act=addfav`, 675, 415)
+    dateUploaded.id = `posted_${gallery.id}`
+    uploader.href = `uploader/${gallery.info.uploader}`
+    uploader.innerHTML = gallery.info.uploader
+    pageCounter.innerHTML = gallery.info.filecount
+    dateFavorited.innerHTML = timeConverter(new Date(gallery.timestamp).getTime() / 1000)
+    categoryTitle.innerHTML = gallery.info.category
+    categoryTitle.className = `cn ${getCategoryClass(gallery.info.category)}`
+    if ('torrents' in gallery.info && gallery.info.torrents.length) {
+      torrent.innerHTML = `<a href="/gallerytorrents.php?gid=${gallery.id}&t=${gallery.token}"` +
+      `onclick="return popUp('/gallerytorrents.php?gid=${gallery.id}&t=${gallery.token}', 610, 590)" rel="nofollow">` +
+      '<img src="https://exhentai.org/img/t.png" alt="T" title="Show torrents"></a>'
+    } else {
+      torrent.innerHTML = '<img src="https://exhentai.org/img/td.png" alt="T" title="No torrents available">'
+    }
+    note.innerHTML = (gallery.note) ? `Note: ${gallery.note}` : ''
+    note.id = `favnote_${gallery.id}`
+    note.style = ''
+    checkbox.value = gallery.id
+    rating.style = getRatingStyle(gallery.info.rating)
+
+    // add tags
+    const entryPoint = tagsSection.querySelector('tbody')
+    entryPoint.innerHTML = ''
+    const tagsCategorized = {}
+    gallery.info.tags.forEach(tag => {
+      const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['misc', tag]
+      if (!(namespace in tagsCategorized)) {
+        tagsCategorized[namespace] = []
+      }
+      const highlight = tags
+        ? (tags[namespace].some(matchTag => matchTag.include && matchTag.regex.test(name)) ||
+        tags.misc.some(matchTag => matchTag.include && matchTag.regex.test(name)))
+        : false
+      tagsCategorized[namespace].push({ name, highlight })
+    })
+
+    for (const category in tagsCategorized) {
+      const categoryTR = parser('<tr></tr>')
+      const categoryTD = parser('<td></td>')
+      entryPoint.appendChild(categoryTR)
+      categoryTR.appendChild(parser(`<td class="tc">${category}:</td>`))
+      categoryTR.appendChild(categoryTD)
+      tagsCategorized[category].forEach(tag => {
+        const style = tag.highlight ? 'color:#090909;border-color:#ffbf36;background:radial-gradient(#ffbf36,#ffba00) !important' : ''
+        categoryTD.appendChild(parser(`<div class="gt" style="${style}" title="${category}:${tag.name}">${tag.name}</div>`))
+      })
+    }
+
+    // change links
+    const url = `/g/${gallery.id}/${gallery.token}/`
+    selection.querySelector('a').href = url
+    tagsSection.href = url
+
+    return selection
+  }
+
+  function newThumbnail (gallery, template, tags = false) {
+    const selection = template.cloneNode(true)
+    const image = selection.querySelector('img')
+    const title = selection.querySelector('.glink')
+    const category = selection.querySelector('.gl5t')
+    const categoryTitle = category.firstElementChild.firstElementChild
+    const dateUploaded = category.firstElementChild.children[1]
+    const rating = category.lastElementChild.firstElementChild
+    const pageCounter = category.lastElementChild.children[1]
+    const torrent = category.lastElementChild.children[2]
+    const tagsSection = selection.querySelector('.gl6t')
+    const note = selection.querySelector('.glfnote')
+    const checkbox = selection.querySelector('input[name="modifygids[]"]')
+
+    image.src = getLargeThumbnail(gallery.info.thumb)
+    image.alt = gallery.info.title || gallery.info.title_jpn
+    image.title = gallery.info.title || gallery.info.title_jpn
+    title.innerHTML = gallery.info.title || gallery.info.title_jpn
+    dateUploaded.innerHTML = timeConverter(gallery.info.posted)
+    dateUploaded.onclick = () => popUp(`/gallerypopups.php?gid=${gallery.id}&t=${gallery.token}&act=addfav`, 675, 415)
+    dateUploaded.id = `posted_${gallery.id}`
+    pageCounter.innerHTML = gallery.info.filecount
+    categoryTitle.innerHTML = gallery.info.category
+    categoryTitle.className = `cn ${getCategoryClass(gallery.info.category)}`
+    if ('torrents' in gallery.info && gallery.info.torrents.length) {
+      torrent.innerHTML = `<a href="/gallerytorrents.php?gid=${gallery.id}&t=${gallery.token}"` +
+      `onclick="return popUp('/gallerytorrents.php?gid=${gallery.id}&t=${gallery.token}', 610, 590)" rel="nofollow">` +
+      '<img src="https://exhentai.org/img/t.png" alt="T" title="Show torrents"></a>'
+    } else {
+      torrent.innerHTML = '<img src="https://exhentai.org/img/td.png" alt="T" title="No torrents available">'
+    }
+    note.innerHTML = (gallery.note) ? `Note: ${gallery.note}` : ''
+    note.id = `favnote_${gallery.id}`
+    note.style = ''
+    checkbox.value = gallery.id
+    rating.style = getRatingStyle(gallery.info.rating)
+
+    // add tags
+    tagsSection.innerHTML = ''
+    const tagsCategorized = {
+      female: [],
+      artist: [],
+      male: [],
+      character: [],
+      group: [],
+      language: [],
+      misc: [],
+      parody: [],
+      reclass: []
+    }
+    gallery.info.tags.forEach(tag => {
+      const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['misc', tag]
+      const highlight = tags
+        ? (tags[namespace].some(matchTag => matchTag.include && matchTag.regex.test(name)) ||
+        tags.misc.some(matchTag => matchTag.include && matchTag.regex.test(name)))
+        : false
+      tagsCategorized[namespace].push({ name, highlight })
+    })
+
+    let index = 0
+    for (const category in tagsCategorized) {
+      tagsCategorized[category].forEach(tag => {
+        const style = 'color:#090909;border-color:#b58411c9;background:radial-gradient(#ffbf36,#ffba00);' +
+         `filter: hue-rotate(${index * HUEOFFSET}deg);`
+        if (tag.highlight) {
+          tagsSection.appendChild(parser(`<div class="gt" style="${style}" title="${category}:${tag.name}">${tag.name}</div>`))
+        }
+      })
+      index++
+    }
+
+    // change links
+    const url = `/g/${gallery.id}/${gallery.token}/`
+    selection.querySelector('a').href = url
+    image.parentElement.href = url
+
+    return selection
+  }
+
+  function newCompact (gallery, template, offset, tags = false) {
+    const selection = template.cloneNode(true)
+    const pane = selection.querySelector('.glthumb')
+    const paneImage = pane.querySelector('img')
+    const paneInfo = pane.lastElementChild
+    const paneCategoryTitle = paneInfo.firstElementChild.firstElementChild
+    const paneDate = paneInfo.firstElementChild.lastElementChild
+    const paneRating = paneInfo.lastElementChild.firstElementChild
+    const panePages = paneInfo.lastElementChild.lastElementChild
+    const categoryTitle = selection.querySelector('.glcat').firstElementChild
+    const glcut = selection.querySelector('.glcut')
+    const userInfo = selection.querySelector('.gl2c').lastElementChild
+    const dateUploaded = userInfo.children[0]
+    const rating = userInfo.children[1]
+    const torrent = userInfo.children[2]
+    const info = selection.querySelector('.glname')
+    const title = info.firstElementChild.children[0]
+    const tagsSection = info.firstElementChild.children[1]
+    const note = info.firstElementChild.children[2]
+    const dateFaved = selection.querySelector('.glfav')
+    const checkbox = selection.querySelector('input[name="modifygids[]"]')
+
+    info.onmouseover = () => show_image_pane(gallery.id)
+    info.onmouseout = () => hide_image_pane(gallery.id)
+    title.innerHTML = gallery.info.title || gallery.info.title_jpn
+    glcut.id = `ic${gallery.id}`
+    pane.id = `it${gallery.id}`
+    paneImage.src = getLargeThumbnail(gallery.info.thumb)
+    paneImage.alt = gallery.info.title || gallery.info.title_jpn
+    paneImage.title = gallery.info.title || gallery.info.title_jpn
+    paneCategoryTitle.innerHTML = gallery.info.category
+    paneCategoryTitle.className = `cn ${getCategoryClass(gallery.info.category)}`
+    paneCategoryTitle.id = `postedpop_${gallery.id}`
+    paneDate.innerHTML = timeConverter(gallery.info.posted)
+    paneDate.onclick = () => popUp(`/gallerypopups.php?gid=${gallery.id}&t=${gallery.token}&act=addfav`, 675, 415)
+    paneDate.id = `posted_${gallery.id}`
+    paneDate.style = 'border-color: rgb(238, 136, 238); background-color: rgba(224, 128, 224, 0.1);'
+    paneDate.style.filter = `invert(100%) hue-rotate(${offset * HUEOFFSET}deg)`
+    paneRating.style = getRatingStyle(gallery.info.rating)
+    panePages.innerHTML = gallery.info.filecount
+    dateUploaded.innerHTML = timeConverter(gallery.info.posted)
+    dateUploaded.onclick = () => popUp(`/gallerypopups.php?gid=${gallery.id}&t=${gallery.token}&act=addfav`, 675, 415)
+    dateUploaded.id = `posted_${gallery.id}`
+    dateFaved.innerHTML = timeConverter(new Date(gallery.timestamp).getTime() / 1000).replace(' ', '<br>')
+    categoryTitle.innerHTML = gallery.info.category
+    categoryTitle.className = `cn ${getCategoryClass(gallery.info.category)}`
+    if ('torrents' in gallery.info && gallery.info.torrents.length) {
+      torrent.innerHTML = `<a href="/gallerytorrents.php?gid=${gallery.id}&t=${gallery.token}"` +
+      `onclick="return popUp('/gallerytorrents.php?gid=${gallery.id}&t=${gallery.token}', 610, 590)" rel="nofollow">` +
+      '<img src="https://exhentai.org/img/t.png" alt="T" title="Show torrents"></a>'
+    } else {
+      torrent.innerHTML = '<img src="https://exhentai.org/img/td.png" alt="T" title="No torrents available">'
+    }
+    note.innerHTML = (gallery.note) ? `Note: ${gallery.note}` : ''
+    note.id = `favnote_${gallery.id}`
+    note.style = ''
+    checkbox.value = gallery.id
+    rating.style = getRatingStyle(gallery.info.rating)
+
+    // add tags
+    tagsSection.innerHTML = ''
+    const tagsCategorized = {
+      female: [],
+      artist: [],
+      male: [],
+      character: [],
+      group: [],
+      language: [],
+      misc: [],
+      parody: [],
+      reclass: []
+    }
+    gallery.info.tags.forEach(tag => {
+      const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['misc', tag]
+      const highlight = tags
+        ? (tags[namespace].some(matchTag => matchTag.include && matchTag.regex.test(name)) ||
+        tags.misc.some(matchTag => matchTag.include && matchTag.regex.test(name)))
+        : false
+      if (highlight) {
+        tagsCategorized[namespace].unshift({ name, highlight })
+      } else {
+        tagsCategorized[namespace].push({ name, highlight })
+      }
+    })
+
+    let count = 0
+    for (const category in tagsCategorized) {
+      tagsCategorized[category].some(tag => {
+        const style = (tag.highlight) ? 'color:#090909;border-color:#b58411c9;background:radial-gradient(#ffbf36,#ffba00);' : ''
+        tagsSection.appendChild(parser(`<div class="gt" style="${style}" title="${category}:${tag.name}">${tag.name}</div>`))
+        count++
+        return count > 8
+      })
+      if (count > 8) { break }
+    }
+
+    // change links
+    const url = `/g/${gallery.id}/${gallery.token}/`
+    title.parentElement.href = url
+    // image.parentElement.href = url
+
+    return selection
+  }
+
+  function newMinimal (gallery, template, offset, tags = false) {
+    const selection = template.cloneNode(true)
+    const pane = selection.querySelector('.glthumb')
+    const paneImage = pane.querySelector('img')
+    const paneInfo = pane.lastElementChild
+    const paneCategoryTitle = paneInfo.firstElementChild.firstElementChild
+    const paneDate = paneInfo.firstElementChild.lastElementChild
+    const paneRating = paneInfo.lastElementChild.firstElementChild
+    const panePages = paneInfo.lastElementChild.lastElementChild
+    const categoryTitle = selection.querySelector('.glcat').firstElementChild
+    const glcut = selection.querySelector('.glcut')
+    const dateUploaded = selection.querySelector('.gl2m').children[2]
+    const rating = selection.querySelector('.gl4m').firstElementChild
+    const torrent = selection.querySelector('.gldown')
+    const info = selection.querySelector('.glname')
+    const title = info.firstElementChild.children[0]
+    const tagsSection = info.firstElementChild.children[1]
+    // if no tags the note section is at the position of the tagsection
+    const note = (tags) ? info.firstElementChild.children[2] : tagsSection
+    const dateFaved = selection.querySelector('.glfav')
+    const checkbox = selection.querySelector('input[name="modifygids[]"]')
+
+    info.onmouseover = () => show_image_pane(gallery.id)
+    info.onmouseout = () => hide_image_pane(gallery.id)
+    title.innerHTML = gallery.info.title || gallery.info.title_jpn
+    glcut.id = `ic${gallery.id}`
+    pane.id = `it${gallery.id}`
+    paneImage.src = getLargeThumbnail(gallery.info.thumb)
+    paneImage.alt = gallery.info.title || gallery.info.title_jpn
+    paneImage.title = gallery.info.title || gallery.info.title_jpn
+    paneCategoryTitle.innerHTML = gallery.info.category
+    paneCategoryTitle.className = `cn ${getCategoryClass(gallery.info.category)}`
+    paneCategoryTitle.id = `postedpop_${gallery.id}`
+    paneDate.innerHTML = timeConverter(gallery.info.posted)
+    paneDate.onclick = () => popUp(`/gallerypopups.php?gid=${gallery.id}&t=${gallery.token}&act=addfav`, 675, 415)
+    paneDate.id = `posted_${gallery.id}`
+    paneDate.style = 'border-color: rgb(238, 136, 238); background-color: rgba(224, 128, 224, 0.1);'
+    paneDate.style.filter = `invert(100%) hue-rotate(${offset * HUEOFFSET}deg)`
+    paneRating.style = getRatingStyle(gallery.info.rating)
+    panePages.innerHTML = gallery.info.filecount
+    dateUploaded.innerHTML = timeConverter(gallery.info.posted)
+    dateUploaded.onclick = () => popUp(`/gallerypopups.php?gid=${gallery.id}&t=${gallery.token}&act=addfav`, 675, 415)
+    dateUploaded.id = `posted_${gallery.id}`
+    dateFaved.innerHTML = timeConverter(new Date(gallery.timestamp).getTime() / 1000)
+    categoryTitle.innerHTML = gallery.info.category
+    categoryTitle.className = `cs ${getCategoryClass(gallery.info.category)}`
+    if ('torrents' in gallery.info && gallery.info.torrents.length) {
+      torrent.innerHTML = `<a href="/gallerytorrents.php?gid=${gallery.id}&t=${gallery.token}"` +
+      `onclick="return popUp('/gallerytorrents.php?gid=${gallery.id}&t=${gallery.token}', 610, 590)" rel="nofollow">` +
+      '<img src="https://exhentai.org/img/t.png" alt="T" title="Show torrents"></a>'
+    } else {
+      torrent.innerHTML = '<img src="https://exhentai.org/img/td.png" alt="T" title="No torrents available">'
+    }
+    note.innerHTML = (gallery.note) ? `Note: ${gallery.note}` : ''
+    note.id = `favnote_${gallery.id}`
+    note.style = ''
+    checkbox.value = gallery.id
+    rating.style = getRatingStyle(gallery.info.rating)
+
+    // add tags
+    tagsSection.innerHTML = ''
+    const tagsCategorized = {
+      female: [],
+      artist: [],
+      male: [],
+      character: [],
+      group: [],
+      language: [],
+      misc: [],
+      parody: [],
+      reclass: []
+    }
+    gallery.info.tags.forEach(tag => {
+      const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['misc', tag]
+      const highlight = tags
+        ? (tags[namespace].some(matchTag => matchTag.include && matchTag.regex.test(name)) ||
+        tags.misc.some(matchTag => matchTag.include && matchTag.regex.test(name)))
+        : false
+      if (highlight) {
+        tagsCategorized[namespace].unshift({ name, highlight })
+      } else {
+        tagsCategorized[namespace].push({ name, highlight })
+      }
+    })
+
+    let count = 0
+    for (const category in tagsCategorized) {
+      tagsCategorized[category].some(tag => {
+        const style = (tag.highlight) ? 'color:#090909;border-color:#b58411c9;background:radial-gradient(#ffbf36,#ffba00);' : ''
+        tagsSection.appendChild(parser(`<div class="gt" style="${style}" title="${category}:${tag.name}">${tag.name}</div>`))
+        count++
+        return count > 5
+      })
+      if (count > 5) { break }
+    }
+
+    // change links
+    const url = `/g/${gallery.id}/${gallery.token}/`
+    title.parentElement.href = url
+    // image.parentElement.href = url
+
+    return selection
+  }
+
+  // BUTTON FUNCTIONS
+  const changeOrder = order => {
+    const request = new window.Request(`/favorites.php?inline_set=fs_${(order === 'favorited') ? 'p' : 'f'}`)
+    window.fetch(request).then(() => window.location.reload())
+  }
+
+  const changeMode = mode => {
+    const request = new window.Request(`/favorites.php?inline_set=dm_${mode}`)
+    window.fetch(request).then(() => window.location.reload())
+  }
+
+  const clickDeleteList = (input) => {
+    const value = input.value.trim()
+    const id = input.getAttribute('lid')
+
+    if (input.id === 'ulf_last_input') {
+      return
+    }
+    if (!value) {
+      // delete list
+      console.debug(`deleting list ${id}`)
+      try {
+        if (_ULF.dict.getListByLid(id).galleries().number) {
+          const response = window.confirm('This list contains still contains galleries, delete anyways?')
+          if (!response) { return }
+        }
+        _ULF.dict.removeList(id)
+      } catch (error) {
+        console.error(error)
+        window.alert('could not delete gallery')
+        return
+      }
+      input.parentElement.parentElement.remove()
+      inputcounter--
+    } else {
+      // rename list
+      const list = _ULF.dict.getListByLid(id)
+      if (!list) {
+        console.error(`list with ${id} not found`)
+        return
+      }
+      if (list.name !== value) {
+        console.debug(`changing ${list.name} to ${value}`)
+        try {
+          list.name = value
+        } catch (error) {
+          console.log(error)
+        }
+      }
+    }
+    _ULF.dict.save()
+  }
+
+  const clickAddList = (input) => {
+    const favsel = select('#favsel')
+    const template = input.parentElement.parentElement.cloneNode(true)
+    const id = input.getAttribute('lid')
+
+    if (input.id !== 'ulf_last_input') {
+      return
+    }
+    if (input.value.trim() !== '') {
+      console.debug('creating new list...')
+      _ULF.dict.newList(input.value, id)
+      input.removeAttribute('id')
+      input.classList.add('rename')
+
+      favsel.appendChild(newInput('', _ULF.newID(), template, _ULF.counter, true))
+    }
+
+    _ULF.dict.save()
+  }
+
+  const clickImport = (input) => {
+    if (!importString) {
+      window.alert('no file selected!')
+      return
+    }
+    try {
+      _ULF.json = loadGM(importString)
+    } catch (err) {
+      window.alert('no valid json supplied')
+      return
+    }
+    saveGM()
+    console.log('imported:')
+    console.log(_ULF.json)
+    window.location.reload()
+  }
+
+  const clickFileImport = (input) => {
+    const reader = new window.FileReader()
+    reader.onload = function () {
+      try {
+        importString = reader.result
+        console.log(JSON.parse(importString))
+      } catch (err) {
+        window.alert('no valid json supplied')
+      }
+    }
+    reader.readAsText(input.files[0])
+  }
+
+  // DIRECTORIES
+  // FAVORITES PAGE
+  if (window.location.pathname.includes('favorites.php')) {
+    const page = parseInt(urlParams.get('ulfpage'))
+    const lid = urlParams.get('lid')
+    const parent = select('h1 + .nosel')
+    const template = parent.children[9].cloneNode(true)
+    const sorter = select('.ido').children[3].firstElementChild
+    const order = sorter.innerText.split(' ')[1].trim().toLowerCase()
+    const mode = select('select')
+    const searchForm = select('form')
+    const searchBox = select('input[name=f_search]')
+    const searchButton = select('input[type=submit]')
+    const [nameCheck, tagsCheck, noteCheck] = selectAll('input[type=checkbox')
+    const pageSelections = [select('.ptt tr'), select('.ptb tr')]
+    const sum = select('.ip')
+    const count = 200
+
+    if (lid) {
+      const list = _ULF.dict.getListByLid(lid)
+      const offset = _ULF.dict._lists.indexOf(list)
+      // select current list item
+      const children = [...parent.children]
+      children.forEach(item => {
+        item.classList.remove('fps')
+      })
+      // modify search button
+      searchForm.onkeydown = (event) => {
+        const x = event.which
+        if (x === 13) {
+          event.preventDefault()
+          insertGalleries(searchBox.value)
+        }
+      }
+      searchButton.type = 'button'
+      searchButton.onclick = () => insertGalleries(searchBox.value)
+
+      // TODO: disable search enter
+
+      // change use posted/favorited order links
+      const orderLink = sorter.querySelector('a')
+      orderLink.href = '#'
+      orderLink.onclick = () => changeOrder(order)
+
+      // change mode links
+      mode.onchange = event => changeMode(event.srcElement.value)
+
+      // get gallery template
+      let galleryTemplate
+      let galleryLocation
+      switch (mode.value) {
+        case 'm':
+          galleryLocation = select('table.itg > tbody')
+          galleryTemplate = galleryLocation.children[1].cloneNode(true)
+          break
+        case 'p':
+          galleryLocation = select('table.itg > tbody')
+          galleryTemplate = galleryLocation.children[1].cloneNode(true)
+          break
+        case 'l':
+          galleryLocation = select('table.itg > tbody')
+          galleryTemplate = galleryLocation.children[1].cloneNode(true)
+          break
+        case 'e':
+          galleryLocation = select('table.itg > tbody')
+          galleryTemplate = galleryLocation.firstElementChild.cloneNode(true)
+          break
+        case 't':
+          galleryLocation = select('.itg.gld')
+          galleryTemplate = galleryLocation.firstElementChild.cloneNode(true)
+          break
+        default:
+          throw window.InternalError('current mode not supported, only supports ' +
+            'Minimal, Minimal+, Compact, Extended, Thumbnail')
+      }
+
+      const insertGalleries = (string = false) => {
+        if (string) {
+          if (window.location.hash) {
+            document.location = window.location.href.split('#')[0] + `#${encodeURIComponent(string)}`
+          } else {
+            document.location += `#${encodeURIComponent(string)}`
+          }
+        } else {
+          document.location = window.location.href.split('#')[0] + '#'
+        }
+        const search = (string)
+          ? {
+              text: string,
+              name: nameCheck.checked,
+              notes: noteCheck.checked,
+              tags: tagsCheck.checked
             }
-        }
-    }
-}
+          : false
+        console.debug(search || 'no search')
+        const { galleries, number, tags } = list.galleries(search, order, page, count)
+        console.debug(`found ${number} galleries`)
 
-if(window.location.pathname.includes("uconfig.php")) {
-    for (var i = 0; i < favs["lists"].length; i++) {
-        $("#favsel").append('<div class="fs1" name=' + i + '>' +
-                            '<div class="fs2"><div class="i" style="' + fav_icon + '" title="' + favs["lists"][i]["name"] + '"></div></div>' +
-                            '<div class="fs3"><input name="' + favs["lists"][i]["name"] + '" value="' + favs["lists"][i]["name"] + '" size="20" maxlength="20" class="stdinput unlfav ' + i + '"></div>' +
-                            '<div class="cl"></div>' +
-                            '</div>');
-    }
-    for (var i = 0; i < favs["lists"].length; i++) {
-        $("#favsel").append('<br>');
-    }
-    $("#favsel").append('<br>');
-    $('#favsel').append('<input type="button" name="add" value="Add Favorite List" class="stdbtn unlfav add">');
-    $('#favsel').append('<input type="button" name="remove" value="Remove Favorite List" class="stdbtn unlfav rem">');
-    $("#favsel").append('<br>');
-    $('#favsel').append('<input type="button" name="export" value="Export Favorite List Settings" class="stdbtn unlfav export">');
-    $('#favsel').append('<input type="button" name="import" value="Import Favorite List Settings" class="stdbtn unlfav import">');
-    $('#favsel').append('<input type="file" id="file" name="file" enctype="multipart/form-data" style="display: none;"/>');
-}
+        sum.innerHTML = `Showing ${number.toLocaleString()} results`
 
-if(window.location.pathname.includes("gallerypopups.php")) {
-    current_gid = QueryString.gid;
-    current_gt = QueryString.t;
-    script_log(current_gid);
-    script_log(current_gt);
-    $("#galpop").attr('method', 'get');
-    $("#galpop").attr("id","disabledpost");
-    $(".stdbtn").attr('type', 'button');
-    $(".stdbtn").addClass("sel");
-    $( "input[name='apply']" ).attr('type', 'button');
-    for (var i = 0; i < favs["lists"].length; i++) {
-        script_log("appending favorite tab " + favs["lists"][i]["name"]);
-        $(".nosel").append(' <div style="height:25px; cursor:pointer"> ' +
-                           '<div style="float:left"><input name="favcat" value="' + (i + 10) + '" id="fav' + (i + 10) + '" style="position:relative; top:-1px" onclick="clicked_fav(this)" type="radio"></div>' +
-                           '<div style="float:left; padding:1px 1px 0 4px; height:15px; width:15px; background-repeat:no-repeat;' + fav_icon + '" onclick="document.getElementById(`fav' + (i + 10) + '`).click()"></div>' +
-                           '<div style="float:left; padding-top:1px" onclick="document.getElementById(`fav' + (i + 10) + '`).click()">' + favs["lists"][i]["name"] + '</div>' +
-                           '<div class="c"></div>' +
-                           '</div>');
-        box_height += 25;
-        $(".stuffbox").attr("style","width:584px; height:" + box_height + "px; margin:2px auto; text-align:left; padding:8px; font-size:9pt");
-        for (var j = 0; j < favs["lists"][i]["galleries"].length; j++) {
-            if(favs["lists"][i]["galleries"][j]["gid"] == current_gid && favs["lists"][i]["galleries"][j]["gt"] == current_gt){
-                $("#fav" + (i+10)).prop("checked", true);
-                selected = i+10;
-                faved_list = i;
-                faved_gallery = j;
-                script_log("saved in list " + favs["lists"][faved_list]["name"] + " in gallery " + faved_gallery);
-                $("textarea").val(favs["lists"][faved_list]["galleries"][faved_gallery]["note"]);
+        orderLink.href = `#${string}`
+
+        // adjust page selection
+        pageSelections.forEach(pageSelection => {
+          const pageTemplate = pageSelection.children[1].cloneNode(true)
+          const pages = Math.ceil(number / count)
+          pageSelection.innerHTML = ''
+
+          // < element
+          if (page === 0) {
+            pageSelection.appendChild(parser('<td class="ptdd">&lt;</td>'))
+          } else {
+            // if out of bounds
+            if ((page - 1) * count > number) {
+              console.error('out of bounds')
             }
+            const pageElement = pageTemplate.cloneNode(true)
+            pageElement.querySelector('a').innerHTML = '<'
+            pageElement.querySelector('a').href = `/favorites.php?page=1&favcat=0&lid=${lid}&ulfpage=${page - 1}#${encodeURIComponent(string)}`
+            pageSelection.appendChild(pageElement)
+          }
+          // [0-9] elements
+          for (let index = 0; index < pages; index++) {
+            const pageElement = pageTemplate.cloneNode(true)
+            if (page !== index) {
+              pageElement.onclick = event => {
+                const href = event.srcElement.href || event.srcElement.firstElementChild.href
+                document.location = href
+              }
+              pageElement.classList.remove('ptds')
+            } else {
+              pageElement.classList.add('ptds')
+            }
+            pageElement.querySelector('a').innerHTML = index + 1
+            pageElement.querySelector('a').href = `/favorites.php?page=1&favcat=0&lid=${lid}&ulfpage=${index}#${encodeURIComponent(string)}`
+            pageSelection.appendChild(pageElement)
+          }
+          // > element
+          if (page === pages - 1) {
+            pageSelection.appendChild(parser('<td class="ptdd">&gt;</td>'))
+          } else {
+            pageTemplate.querySelector('a').innerHTML = '>'
+            pageTemplate.querySelector('a').href = `/favorites.php?page=1&favcat=0&lid=${lid}&ulfpage=${page + 1}#${encodeURIComponent(string)}`
+            pageTemplate.classList.remove('ptds')
+            pageSelection.appendChild(pageTemplate)
+          }
+        })
+
+        // add gallery items
+        galleryLocation.innerHTML = ''
+        let firstRow = ''
+        switch (mode.value) {
+          case 'm':
+            firstRow = parser('<tr><th></th><th>Published</th><th></th><th>Title</th><th></th><th colspan="2">Favorited</th></tr>')
+            galleryLocation.append(firstRow)
+            galleries.forEach(gallery => galleryLocation.append(newMinimal(gallery, galleryTemplate, offset)))
+            break
+          case 'p':
+            firstRow = parser('<tr><th></th><th>Published</th><th></th><th>Title</th><th></th><th colspan="2">Favorited</th></tr>')
+            galleryLocation.append(firstRow)
+            galleries.forEach(gallery => galleryLocation.append(newMinimal(gallery, galleryTemplate, offset, tags)))
+            break
+          case 'l':
+            firstRow = parser('<tr><th></th><th>Published</th><th>Title</th><th colspan="2">Favorited</th></tr>')
+            galleryLocation.append(firstRow)
+            galleries.forEach(gallery => galleryLocation.append(newCompact(gallery, galleryTemplate, offset, tags)))
+            break
+          case 'e':
+            galleries.forEach(gallery => galleryLocation.append(newExtended(gallery, galleryTemplate, tags)))
+            break
+          case 't':
+            galleries.forEach(gallery => galleryLocation.append(newThumbnail(gallery, galleryTemplate, tags)))
+            break
+          default:
+            throw window.InternalError('current mode not supported, only supports ' +
+              'Minimal, Minimal+, Compact, Extended, Thumbnail')
         }
+      }
+      // save search in hash / reapply search from hash
+      if (window.location.hash) {
+        const hash = decodeURIComponent(window.location.hash.slice(1))
+        searchBox.value = (hash !== 'false') ? hash : ''
+        insertGalleries(searchBox.value)
+      } else {
+        insertGalleries()
+      }
+
+      // start a search when changing text input or categories
+      searchBox.onchange = () => insertGalleries(searchBox.value)
+      // searchBox.oninput = () => {
+      //   let location = window.location.href.split('#')[0]
+      //   searchForm.action = `${location}#${searchBox.value}`
+      // }
+      nameCheck.onclick = () => insertGalleries(searchBox.value)
+      tagsCheck.onclick = () => insertGalleries(searchBox.value)
+      noteCheck.onclick = () => insertGalleries(searchBox.value)
     }
-    $("#favdel").parent().parent().remove();
-    $(".nosel").append('<div style="height:25px; cursor:pointer"><div style="float:left"><input type="radio" name="favcat" value="favdel" id="favdel" style="position:relative; top:-1px" onclick="clicked_fav(this)"></div><div style="float:left; padding-left:5px" onclick="document.getElementById(`favdel`).click()">Remove from Favorites</div><div class="c"></div></div>');
-}
 
-$('.stdinput.unlfav').each(function() {
-    var elem = $(this);
+    // insert favorite list items
+    const end = parent.children[10]
+    _ULF.dict.lists.forEach(list => {
+      parent.insertBefore(newItem(list, template, lid === list.id, mode.value), end)
+    })
+  }
+  // GALLERY PAGE
+  if (window.location.pathname.includes('/g/')) {
+    const [id, token] = window.location.pathname.split('/').slice(2)
+    const list = _ULF.dict.getListByGid(id)
 
-    // Save current value of element
-    elem.data('oldVal', elem.val());
+    // add favorite icon if gallery is in list
+    if (list) {
+      const offset = _ULF.dict._lists.indexOf(list)
+      const favBtn = select('#gdf')
 
-    // Look for changes in the value
-    elem.bind("propertychange change click keyup input paste", function(event){
-        // If value has changed...
-        if (elem.data('oldVal') != elem.val()) {
-            script_log("changing " + elem.data('oldVal') + " to " + favs["lists"][$(this).parent().parent().attr("name")]["name"]);
-            favs["lists"][$(this).parent().parent().attr("name")]["name"] = elem.val();
-            GM_setValue ("favsJson", JSON.stringify(favs) );
+      // dumb gallery info
+      console.debug(list.getGallery(id))
+
+      favBtn.innerHTML = '<div style="float:left; cursor:pointer" id="fav">' +
+      `<div class="i" style="background-image:url(https://exhentai.org/img/fav.png); background-position:0px -173px; margin-left:16px" title="${list.name}">` +
+      `</div></div><div style="float:left">&nbsp; <a id="favoritelink" href="#" onclick="return false">${list.name}</a></div><div class="c"></div>`
+      favBtn.querySelector('.i').style.filter = `invert(100%) hue-rotate(${offset * HUEOFFSET}deg)`
+    } else {
+      // dumb gallery info
+      const gallery = { id, token }
+      getGalleryInfo([gallery]).then(info => console.debug(info[0]))
+    }
+  }
+  // SETTINGS
+  if (window.location.pathname.includes('uconfig.php')) {
+    console.log('adding UI to settings...')
+    const favsel = select('#favsel')
+    // add list inputs
+    {
+      const template = favsel.lastElementChild.cloneNode(true)
+      template.querySelector('.i').title = 'unlimited favorites'
+
+      favsel.previousElementSibling.insertAdjacentHTML('beforeend',
+        `<br><br>
+        <b>Unlimited favorites:</b><br>
+        Write into the last input to create a <b>new list</b><br>
+        Click outside the text inputs to <b>save</b> your modifications!`)
+      _ULF.dict.lists.forEach((list, index) => {
+        favsel.appendChild(newInput(list.name, list.id, template, index))
+      })
+      favsel.appendChild(newInput('', _ULF.newID(), template, _ULF.counter, true))
+    }
+
+    // add buttons
+    {
+      const template = select('#apply').firstElementChild.cloneNode(true)
+      template.removeAttribute('id')
+      template.type = 'button'
+      template.classList.add('ulf')
+
+      const btnFileExport = template.cloneNode(true)
+      const btnFileImport = template.cloneNode(true)
+      const btnFakeFileImport = template.cloneNode(true)
+      const btnImport = template.cloneNode(true)
+      const btnClear = template.cloneNode(true)
+      const btnUpdate = template.cloneNode(true)
+
+      /*
+      btnFileImport.style.padding = '2px 33px 2px'
+      btnFileImport.style.margin = '0'
+      btnFileExport.style.padding = '2px 33px 2px'
+      btnFileExport.style.margin = '0'
+      */
+
+      btnImport.value = 'import favs'
+      btnImport.setAttribute('for', 'ulf_import_json')
+      btnImport.onclick = event => clickImport(event.srcElement)
+
+      btnClear.value = 'delete all'
+      btnClear.onclick = () => {
+        if (window.confirm('delete all list? this action can\'t be undone!')) {
+          clearFavs()
         }
-    });
-});
+      }
 
-$('#file').on('change', function() {
-    var file = this.files[0];
-    var reader = new FileReader();
-    reader.onload = function() {
-        favs=JSON.parse(this.result);
-        script_log(favs);
-        GM_setValue ("favsJson", JSON.stringify(favs) );
-        location.reload();
-    };
-    reader.readAsText(file);
-});
+      btnFileImport.type = 'file'
+      btnFileImport.setAttribute('accept', '.json,application/json')
+      btnFileImport.id = 'ulf_import_json'
+      btnFileImport.style.display = 'none'
+      btnFileImport.onchange = event => clickFileImport(event.srcElement)
 
-$(function(){
-    $('.stdbtn.fav').click(function(){
-        script_log("yo");
-        $(".inp.unlfav:checked").each(function( index ) {
-            script_log( $( this ).val() );
-            script_log( $( this ).attr("token") );
-            $( "#stdinput option:selected" ).text();
-        });
+      btnFakeFileImport.type = 'button'
+      btnFakeFileImport.value = 'select file'
+      btnFakeFileImport.id = 'ulf_import_button'
+      btnFakeFileImport.onclick = () => select('#ulf_import_json').click()
 
-    });
-    $('.order').click(function(){
-        if(favs["order"]=="posted"){
-            favs["order"]="faved";
-        }else{
-            favs["order"]="posted";
-        }
-        GM_setValue ("favsJson", JSON.stringify(favs) );
-        location.reload();
-    });
-    $('.display').click(function(){
-        if(favs["display"]=="list"){
-            favs["display"]="thumb";
-        }else{
-            favs["display"]="list";
-        }
-        GM_setValue ("favsJson", JSON.stringify(favs) );
-        location.reload();
-    });
-    $('input[type="radio"]').click(function(){
-        selected = $(this).attr("value");
-    });
-    $('.stdbtn.unlfav.import').click(function(){
-        $('#file').click();
-    });
-    $('.stdbtn.unlfav.export').click(function(){
-        $("#favsel").append('<a id="downloadAnchorElem" style="display:none"></a>');
-        var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(favs));
-        var dlAnchorElem = document.getElementById('downloadAnchorElem');
-        dlAnchorElem.setAttribute("href",     dataStr     );
-        dlAnchorElem.setAttribute("download", "unl_fav.json");
-        dlAnchorElem.click();
-    });
-    $('.stdbtn.unlfav.add').click(function(){
-        script_log("adding another list");
-        favs["lists"].push({"name": "Favorites " + (favs["lists"].length + 10), "galleries" : []});
-        GM_setValue ("favsJson", JSON.stringify(favs) );
-        lists = favs["lists"];
-        last_list_index = [lists.length-1];
-        $("#favsel").find(".fs1").last().after('<div class="fs1" name=' + i + '>' +
-                                               '<div class="fs2"><div class="i" style="' + fav_icon + '" title="' + favs["lists"][last_list_index]["name"] + '"></div></div>' +
-                                               '<div class="fs3"><input name="' + favs["lists"][last_list_index]["name"] + '" value="' + favs["lists"][last_list_index]["name"] + '" size="20" maxlength="20" class="stdinput unlfav ' + last_list_index + '"></div>' +
-                                               '<div class="cl"></div>' +
-                                               '</div>');
-        $("#favsel").find(".fs1").last().after('<br>');
-    });
-    $('.stdbtn.unlfav.rem').click(function(){
-        if(favs["lists"][last_list_index]["galleries"].length > 0){
-            var fav_del = false;
-            var r = confirm("Do you want to delete this list?\n(Contains " + favs["lists"][last_list_index]["galleries"].length + " galleries)");
-            if (r == true) {
-                fav_del = true;
+      btnFileExport.name = 'ulf_export'
+      btnFileExport.value = 'export favs'
+      btnFileExport.onclick = () => {
+        const fileName = 'unl_favs_' + new Date().toISOString() + '.json'
+        download(JSON.stringify(_ULF.json), fileName, 'text/json')
+      }
+
+      btnUpdate.name = 'ulf_update'
+      btnUpdate.value = 'update all'
+      btnUpdate.alt = 'update information for all galleries (this may take a while)'
+      btnUpdate.onclick = async () => {
+        const response = window.confirm('Update all Galleries? This can take a while and possibly be destructive, consider creating a backup first!')
+        const counterMax = _ULF.dict.lists.reduce((acc, cur) => (acc._galleries) ? acc._galleries.length : acc + cur._galleries.length)
+        console.debug(`found ${counterMax} galleries`)
+
+        if (response === true) {
+          const limit = 25
+          const parallel = 4
+          const promises = []
+
+          await _ULF.dict.lists.forEach(async list => {
+            console.log(`queueing list ${list.name}`)
+            const max = list._galleries.length
+
+            for (let current = 0; current < max; current += (limit * parallel)) {
+              console.log(`queueing from ${current} to ${current + limit * parallel}`)
+              for (let x = 0; x < parallel; x++) {
+                promises.push(async () => {
+                  const slice = list._galleries.slice(current + (limit * x), current + (limit * (x + 1)))
+                  if (slice.length) {
+                    getGalleryInfo(slice).then(entries => {
+                      entries.forEach(info => {
+                        list.getGallery(info.gid).info = info
+                      })
+                    })
+                  }
+                })
+              }
             }
+          })
+          await Promise.eachLimit(promises, parallel, 500).then(() => {
+            _ULF.dict.save()
+            window.alert(`updated ${counterMax} galleries!`)
+          })
         }
-        if(favs["lists"][last_list_index]["galleries"].length === 0 || fav_del === true) {
-            script_log("removing list " + favs["lists"][last_list_index]["name"]);
-            favs["lists"].splice(last_list_index, 1);
-            GM_setValue ("favsJson", JSON.stringify(favs) );
-            $(".stdinput.unlfav." + last_list_index).parent().parent().next().remove();
-            $(".stdinput.unlfav." + last_list_index).parent().parent().remove();
-            lists = favs["lists"];
-            last_list_index = [lists.length-1];
-        }
-    });
-    $( "input[name='apply']" ).click(function(){
-        if(faved_list+10) {
+      }
 
-            if(faved_list+10 != selected) {
-                script_log("removing from list " + favs["lists"][faved_list]["name"]);
-                favs["lists"][faved_list]["galleries"].splice(faved_gallery, 1);
-                /*
-				if(favs["lists"][faved_list]["galleries"].length === 0 && faved_list == parseInt(last_list_index)-1) {
-					script_log("removing empty list " + favs["lists"][faved_list+1]["name"]);
-					favs["lists"].splice(faved_list+1, 1);
-				}
-				*/
-                GM_setValue ("favsJson", JSON.stringify(favs) );
+      // insert all buttons
+      const importBox = parser('<div id="ulf_import_box"></div>')
+      importBox.append(btnFakeFileImport)
+      importBox.append(btnFileImport)
+      importBox.append(btnImport)
+      importBox.append(btnFileExport)
+      importBox.append(btnClear)
+      importBox.append(btnUpdate)
+      favsel.parentElement.appendChild(importBox)
+    }
+  }
+  // ADD FAVORITES
+  if (window.location.pathname.includes('gallerypopups.php')) {
+    const gid = urlParams.get('gid')
+    const token = urlParams.get('t')
+    const list = _ULF.dict.getListByGid(gid) || false
+    let currentClick = list.id || selected
+    let lastClick = currentClick
+    const note = select('textarea[name=favnote]')
+
+    if (list) {
+      const gallery = list.getGallery(gid)
+      note.value = gallery.note
+    }
+
+    // disable apply button
+    const applyBtn = select('input[name=apply]')
+    const form = select('form')
+    applyBtn.type = 'button'
+    form.id = 'galpop_disabled'
+
+    const submitFavs = (src, apply = false) => {
+      const addULF = new Promise((resolve, reject) => {
+        currentClick = src.id
+        if (currentClick === lastClick || apply === true) {
+          console.debug('clicked already selected option, trying to perform action')
+          if (list) {
+            if (currentClick === 'favdel') {
+              console.debug(`removing a gallery from ULF list '${list.name}'`)
+              list.removeGallery(gid)
+              _ULF.dict.save()
+              // window.opener.location.reload(false)
+              resolve('gallery removed')
+            } else if (src.hasAttribute('lid')) {
+              const newList = _ULF.dict.getListByLid(src.getAttribute('lid'))
+              if (list === newList) {
+                console.debug('updating gallery info')
+                const gallery = list.getGallery(gid)
+                gallery.note = note.value
+                _ULF.dict.save()
+                select('#favdel').checked = true
+
+                resolve('gallery updated')
+                // don't understand why this needs to be here
+                window.opener.location.reload(false)
+                form.submit()
+              } else {
+                console.debug(`moving gallery from '${list.name}' to '${newList.name}'`)
+                list.removeGallery(gid)
+                newList.addGallery(gid, token, note.value).then(response => {
+                  console.debug(response)
+                  _ULF.dict.save()
+                  select('#favdel').checked = true
+
+                  resolve('gallery moved')
+                  // don't understand why this needs to be here
+                  window.opener.location.reload(false)
+                  form.submit()
+                })
+              }
+            } else {
+              console.debug(`moving gallery from ULF list '${list.name}' to '${currentClick}'`)
+              list.removeGallery(gid)
+              _ULF.dict.save()
+              // window.opener.location.reload(false)
+              resolve('gallery moved')
             }
+          } else {
+            if (src.hasAttribute('lid')) {
+              const newList = _ULF.dict.getListByLid(src.getAttribute('lid'))
+              console.debug(`adding a gallery to ULF list '${newList.name}'`)
+              newList.addGallery(gid, token, note.value).then(response => {
+                console.debug(response)
+                _ULF.dict.save()
+                select('#favdel').checked = true
+                resolve('gallery added')
+                // don't understand why this needs to be here
+                window.opener.location.reload(false)
+                form.submit()
+              })
+            } else if (currentClick === 'favdel') {
+              resolve('removing a gallery from normal list')
+            } else {
+              resolve('adding a gallery to normal list')
+            }
+          }
         }
-        if(selected > 9 && faved_list+10 != selected) {
-            var sadpandaRequest = '{  "method": "gdata",  "gidlist": [[' + current_gid +', "' + current_gt + '" ] ]}';
-            var sadpandaInfo;
+        reject('do nothing') // eslint-disable-line prefer-promise-reject-errors
+      })
 
-            script_log(sadpandaRequest);
-            var ret = GM_xmlhttpRequest({
-                method: "POST",
-                data: sadpandaRequest,
-                url: "https://e-hentai.org/api.php",
-                onload: function(res) {
-                    sadpandaInfo = JSON.parse(res.responseText);
-                    script_log(sadpandaInfo);
-                    info = sadpandaInfo["gmetadata"][0];
+      // after adding gallery to list submit form
+      addULF.then(response => {
+        console.debug(response)
+        form.submit()
+      }).catch(response => {
+        lastClick = currentClick
+      })
+    }
 
-                    script_log("adding gallery to list " + favs["lists"][(selected-10)]["name"]);
-                    favs["lists"][(selected-10)]["galleries"].push({"gid": current_gid, "gt": current_gt, "note": $("textarea").val(), "date": new Date(), "info": info});
-                    GM_setValue ("favsJson", JSON.stringify(favs) );
-                    $("#favdel").prop("checked", true);
-                    $("#disabledpost").attr("id","galpop");
-                    $("#galpop").attr('method', 'post');
-                    $('#galpop').submit();
-                }
-            });
-        }
-        if(faved_list+10 == selected){
-            favs["lists"][faved_list]["galleries"][faved_gallery]["note"] = $("textarea").val();
-            GM_setValue ("favsJson", JSON.stringify(favs) );
-            $("#favdel").prop("checked", true);
-            setTimeout(function(){
-                $("#disabledpost").attr("id","galpop");
-                $("#galpop").attr('method', 'post');
-                $('#galpop').submit();
-            },250);
-        }
-        if(selected <= 9 || selected == "favdel"){
-            setTimeout(function(){
-                $("#disabledpost").attr("id","galpop");
-                $("#galpop").attr('method', 'post');
-                $('#galpop').submit();
-            },250);
-        }
-    });
-});
+    let inputcounter = 0
+
+    applyBtn.onclick = event => submitFavs(select("input[type='radio']:checked"), true)
+    const newButton = (name, id, template, counter) => {
+      const selection = template.cloneNode(true)
+      const input = selection.firstElementChild.firstElementChild
+
+      input.setAttribute('id', `fav${10 + counter}`)
+      input.setAttribute('lid', id)
+      input.value = name
+      input.classList.add('ulf', 'ulf_add_gallery')
+      input.onclick = event => submitFavs(event.srcElement)
+      if (list && id === list.id) {
+        input.checked = true
+      } else {
+        input.checked = false
+      }
+
+      selection.children[1].style.filter = `invert(100%) hue-rotate(${inputcounter * HUEOFFSET}deg)`
+      selection.children[1].onclick = () => input.click()
+      selection.children[2].innerHTML = name
+      selection.children[2].onclick = () => input.click()
+      inputcounter++
+
+      return selection
+    }
+
+    // add ULF button
+    const parent = select('.nosel')
+    const template = parent.children[9].cloneNode(true)
+
+    const children = [...parent.children]
+    children.forEach(item => {
+      const input = item.firstElementChild.firstElementChild
+      input.onclick = event => submitFavs(event.srcElement)
+    })
+
+    if (parent.children.length === 11) {
+      const deleteBtn = parent.lastElementChild
+      _ULF.dict.lists.forEach((list, index) => {
+        parent.insertBefore(newButton(list.name, list.id, template, index), deleteBtn)
+      })
+    } else {
+      const deleteBtn = parser('<div style="height:25px; cursor:pointer">' +
+      '<div style="float:left"><input type="radio" name="favcat" value="favdel" id="favdel" style="position:relative; top:-1px"></div>' +
+      '<div style="float:left; padding-left:5px" onclick="document.getElementById(\'favdel\').click()">Remove from Favorites</div>' +
+      '<div class="c"></div>' +
+      '</div>')
+      _ULF.dict.lists.forEach((list, index) => {
+        parent.append(newButton(list.name, list.id, template, index))
+      })
+      parent.append(deleteBtn)
+      const input = select('#favdel')
+      input.onclick = event => submitFavs(event.srcElement)
+    }
+  }
+  // MAIN PAGE
+  {
+    const mode = window.document.querySelector('select')
+    const items = window.document.querySelectorAll('.gldown')
+    // add fav highlight to gallery item
+    console.debug(`changing favorite highlighting for ${items.length} galleries`)
+    items.forEach(item => {
+      let favButton
+      switch (mode.value) {
+        case 'm':
+          favButton = item.parentElement.previousElementSibling.children[2]
+          break
+        case 'p':
+          favButton = item.parentElement.previousElementSibling.children[2]
+          break
+        case 'l':
+          favButton = item.parentElement.children[0]
+          break
+        case 'e':
+          favButton = item.parentElement.children[1]
+          break
+        case 't':
+          favButton = item.parentElement.previousElementSibling.children[1]
+          break
+        default:
+          throw window.InternalError('current mode not supported, only supports ' +
+            'Minimal, Minimal+, Compact, Extended, Thumbnail')
+      }
+
+      const gid = favButton.id.replace('posted_', '')
+      const list = _ULF.dict.getListByGid(gid) || _ULF.dict.getListByLid(urlParams.get('lid'))
+      if (list) {
+        const offset = _ULF.dict._lists.indexOf(list)
+        favButton.style = 'border-color: rgb(238, 136, 238); background-color: rgba(224, 128, 224, 0.1);'
+        favButton.style.filter = `invert(100%) hue-rotate(${offset * HUEOFFSET}deg)`
+      }
+    })
+  }
+})()
+
+GM_addStyle(`* {
+    .ulf_import_box {
+        width: 250px;
+    }
+    .ulf_import_box > input {
+        width: 100%
+    }
+}`)
