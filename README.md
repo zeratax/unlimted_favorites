@@ -25,7 +25,6 @@ Works best with **Tampermonkey**
 
 - If a gallery gets updated the new instance will not be favorited
 - *Show All Favorites* does not show unlimited_favorites
-- no tag highlighting on `/favorites.php`
 - non standard thumbnail sizes are not displayed properly
 
 ## Images
