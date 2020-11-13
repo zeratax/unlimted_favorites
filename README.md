@@ -14,7 +14,7 @@ creates additional locally stored favorite lists for sadpanda
 
 ## Install
 
-Install from https://openuserjs.org/scripts/ZerataX/unlimited_favs
+Install from https://github.com/ZerataX/unlimted_favorites/raw/master/unlfavs.user.js
 
 Works best with **Tampermonkey**
 
@@ -30,3 +30,4 @@ Works best with **Tampermonkey**
 ## Images
 
 ![settings](./screenshots/settings.png)
+![search](./screenshots/search.png)
