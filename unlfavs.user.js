@@ -11,7 +11,7 @@
 // @grant          GM_getValue
 // @grant          GM_setValue
 // @grant          GM_addStyle
-// @version        0.8.0
+// @version        0.8.1
 // ==/UserScript==
 /* global GM_setValue GM_getValue GM_info GM_addStyle, selected, popUp, show_image_pane, hide_image_pane */
 
@@ -349,6 +349,7 @@
     get id () { return this._id }
     get token () { return this._token }
     get note () { return this._note }
+    set note (note) { this._note = note }
     get timestamp () { return this._timestamp }
     get info () { return this._info }
     set info (info) { this._info = info }
@@ -384,6 +385,7 @@
   }
   _ULF.dict = createLists()
   console.log(_ULF)
+  saveGM()
 
   // USERSCRIPT SPECIFIC
   function clearFavs () {
@@ -401,7 +403,7 @@
   function loadGM (importString) {
     const GMString = String(importString || GM_getValue('__unlimitedfavs__', ''))
     // set default if no import and no saved version
-    const GMJSON = (GMString && GMString !== '{}') ? JSON.parse(GMString) : {
+    const defaultValue = {
       lists: [{
         name: 'Favorites 11',
         id: '_' + Math.random().toString(36).substr(2, 9),
@@ -409,52 +411,65 @@
       }],
       version: GM_info.script.version
     }
-    console.debug(GMJSON)
+    try {
+      const GMJSON = (GMString && GMString !== '{}') ? JSON.parse(GMString) : defaultValue
+      console.debug(GMJSON)
 
-    // VERSION ADJUSTMENTS
-    if (!GMJSON.version) {
-      GMJSON.version = '0.6.5'
-    }
-
-    // Allow to backup before doing any other changes to the user data
-    if (versionCompare(String(GMJSON.version), GM_info.script.version) === -1) {
-      const confirmation = window.confirm(`Unlimited Favorites has been updated to version ${GM_info.script.version},` +
-      'do you want to create a backup before updating your data?\n' +
-      `see what's new here: https://github.com/ZerataX/unlimted_favorites/releases/tag/${GM_info.script.version}`)
-      if (confirmation) {
-        const fileName = 'unl_favs_' + new Date().toISOString() + '.json'
-        download(JSON.stringify(GMJSON), fileName, 'text/json')
+      // VERSION ADJUSTMENTS
+      if (!GMJSON.version) {
+        GMJSON.version = '0.6.5'
       }
-    } 
 
-    if (versionCompare(String(GMJSON.version), '0.7.0') === -1) {
-      // fix saved JSONs from < 0.7.0 versions
-      // id from string to int
-      for (const list of GMJSON.lists) {
-        for (const gallery of list.galleries) {
-          gallery.gid = parseInt(gallery.gid)
+      // Allow to backup before doing any other changes to the user data
+      if (versionCompare(String(GMJSON.version), GM_info.script.version) === -1) {
+        // only backup on major version change
+        const oldMajor = parseInt(GMJSON.version.split('.')[1])
+        const newMajor = parseInt(GM_info.script.version.split('.')[1])
+        if (oldMajor !== newMajor) {
+          const confirmation = window.confirm(`Unlimited Favorites has been updated to version ${GM_info.script.version}, ` +
+          'do you want to create a backup before updating your data?\n' +
+          `see what's new here: https://github.com/ZerataX/unlimted_favorites/releases/tag/${GM_info.script.version}`)
+          if (confirmation) {
+            const fileName = 'unl_favs_' + new Date().toISOString() + '.json'
+            download(JSON.stringify(GMJSON), fileName, 'text/json')
+          }
         }
       }
-    }
 
-    if (versionCompare(String(GMJSON.version), '0.8.0') === -1) {
-    // fix saved JSONs from < 0.8.0 versions
-    // rename date to timestamp
-      for (const list of GMJSON.lists) {
-        list.id = _ULF.newID()
-        for (const gallery of list.galleries) {
-          gallery.timestamp = gallery.date
-          delete gallery.date
+      if (versionCompare(String(GMJSON.version), '0.7.0') === -1) {
+        // fix saved JSONs from < 0.7.0 versions
+        // id from string to int
+        for (const list of GMJSON.lists) {
+          for (const gallery of list.galleries) {
+            gallery.gid = parseInt(gallery.gid)
+          }
         }
       }
-      delete GMJSON.display
-      delete GMJSON.order
+
+      if (versionCompare(String(GMJSON.version), '0.8.0') === -1) {
+      // fix saved JSONs from < 0.8.0 versions
+      // rename date to timestamp
+        for (const list of GMJSON.lists) {
+          list.id = '_' + Math.random().toString(36).substr(2, 9)
+          for (const gallery of list.galleries) {
+            gallery.timestamp = gallery.date
+            delete gallery.date
+          }
+        }
+        delete GMJSON.display
+        delete GMJSON.order
+      }
+
+      // update version
+      GMJSON.version = GM_info.script.version
+
+      return GMJSON
+    } catch {
+      window.alert('something went wrong trying to parse your settings, please download your settings and create an issue them attachedd here: https://github.com/ZerataX/unlimted_favorites/issues/new')
+      const fileName = 'unl_favs_' + new Date().toISOString() + '.json'
+      download(GMString, fileName, 'text/json')
+      return defaultValue
     }
-
-    // update version
-    GMJSON.version = GM_info.script.version
-
-    return GMJSON
   }
 
   // SADPANDA API
@@ -687,8 +702,10 @@
       if (!(namespace in tagsCategorized)) {
         tagsCategorized[namespace] = []
       }
-      const highlight = tags ? (tags[namespace].some(matchTag => matchTag.include && matchTag.regex.test(name)) ||
-        tags.misc.some(matchTag => matchTag.include && matchTag.regex.test(name))) : false
+      const highlight = tags
+        ? (tags[namespace].some(matchTag => matchTag.include && matchTag.regex.test(name)) ||
+        tags.misc.some(matchTag => matchTag.include && matchTag.regex.test(name)))
+        : false
       tagsCategorized[namespace].push({ name, highlight })
     })
 
@@ -764,8 +781,10 @@
     }
     gallery.info.tags.forEach(tag => {
       const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['misc', tag]
-      const highlight = tags ? (tags[namespace].some(matchTag => matchTag.include && matchTag.regex.test(name)) ||
-        tags.misc.some(matchTag => matchTag.include && matchTag.regex.test(name))) : false
+      const highlight = tags
+        ? (tags[namespace].some(matchTag => matchTag.include && matchTag.regex.test(name)) ||
+        tags.misc.some(matchTag => matchTag.include && matchTag.regex.test(name)))
+        : false
       tagsCategorized[namespace].push({ name, highlight })
     })
 
@@ -863,8 +882,10 @@
     }
     gallery.info.tags.forEach(tag => {
       const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['misc', tag]
-      const highlight = tags ? (tags[namespace].some(matchTag => matchTag.include && matchTag.regex.test(name)) ||
-        tags.misc.some(matchTag => matchTag.include && matchTag.regex.test(name))) : false
+      const highlight = tags
+        ? (tags[namespace].some(matchTag => matchTag.include && matchTag.regex.test(name)) ||
+        tags.misc.some(matchTag => matchTag.include && matchTag.regex.test(name)))
+        : false
       if (highlight) {
         tagsCategorized[namespace].unshift({ name, highlight })
       } else {
@@ -965,8 +986,10 @@
     }
     gallery.info.tags.forEach(tag => {
       const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['misc', tag]
-      const highlight = tags ? (tags[namespace].some(matchTag => matchTag.include && matchTag.regex.test(name)) ||
-        tags.misc.some(matchTag => matchTag.include && matchTag.regex.test(name))) : false
+      const highlight = tags
+        ? (tags[namespace].some(matchTag => matchTag.include && matchTag.regex.test(name)) ||
+        tags.misc.some(matchTag => matchTag.include && matchTag.regex.test(name)))
+        : false
       if (highlight) {
         tagsCategorized[namespace].unshift({ name, highlight })
       } else {
@@ -1084,7 +1107,7 @@
   }
 
   const clickFileImport = (input) => {
-    var reader = new window.FileReader()
+    const reader = new window.FileReader()
     reader.onload = function () {
       try {
         importString = reader.result
@@ -1106,6 +1129,7 @@
     const sorter = select('.ido').children[3].firstElementChild
     const order = sorter.innerText.split(' ')[1].trim().toLowerCase()
     const mode = select('select')
+    const searchForm = select('form')
     const searchBox = select('input[name=f_search]')
     const searchButton = select('input[type=submit]')
     const [nameCheck, tagsCheck, noteCheck] = selectAll('input[type=checkbox')
@@ -1121,8 +1145,16 @@
       children.forEach(item => {
         item.classList.remove('fps')
       })
-      // remove search button
-      searchButton.remove()
+      // modify search button
+      searchForm.onkeydown = (event) => {
+        const x = event.which
+        if (x === 13) {
+          event.preventDefault()
+          insertGalleries(searchBox.value)
+        }
+      }
+      searchButton.type = 'button'
+      searchButton.onclick = () => insertGalleries(searchBox.value)
 
       // TODO: disable search enter
 
@@ -1173,12 +1205,14 @@
         } else {
           document.location = window.location.href.split('#')[0] + '#'
         }
-        const search = (string) ? {
-          text: string,
-          name: nameCheck.checked,
-          notes: noteCheck.checked,
-          tags: tagsCheck.checked
-        } : false
+        const search = (string)
+          ? {
+              text: string,
+              name: nameCheck.checked,
+              notes: noteCheck.checked,
+              tags: tagsCheck.checked
+            }
+          : false
         console.debug(search || 'no search')
         const { galleries, number, tags } = list.galleries(search, order, page, count)
         console.debug(`found ${number} galleries`)
@@ -1274,6 +1308,10 @@
 
       // start a search when changing text input or categories
       searchBox.onchange = () => insertGalleries(searchBox.value)
+      // searchBox.oninput = () => {
+      //   let location = window.location.href.split('#')[0]
+      //   searchForm.action = `${location}#${searchBox.value}`
+      // }
       nameCheck.onclick = () => insertGalleries(searchBox.value)
       tagsCheck.onclick = () => insertGalleries(searchBox.value)
       noteCheck.onclick = () => insertGalleries(searchBox.value)
@@ -1354,7 +1392,11 @@
       btnImport.onclick = event => clickImport(event.srcElement)
 
       btnClear.value = 'delete all'
-      btnClear.onclick = () => clearFavs()
+      btnClear.onclick = () => {
+        if (window.confirm('delete all list? this action can\'t be undone!')) {
+          clearFavs()
+        }
+      }
 
       btnFileImport.type = 'file'
       btnFileImport.setAttribute('accept', '.json,application/json')
@@ -1445,10 +1487,10 @@
     applyBtn.type = 'button'
     form.id = 'galpop_disabled'
 
-    const submitFavs = (src) => {
+    const submitFavs = (src, apply = false) => {
       const addULF = new Promise((resolve, reject) => {
         currentClick = src.id
-        if (currentClick === lastClick) {
+        if (currentClick === lastClick || apply === true) {
           console.debug('clicked already selected option, trying to perform action')
           if (list) {
             if (currentClick === 'favdel') {
@@ -1459,18 +1501,31 @@
               resolve('gallery removed')
             } else if (src.hasAttribute('lid')) {
               const newList = _ULF.dict.getListByLid(src.getAttribute('lid'))
-              console.debug(`moving gallery from '${list.name}' to '${newList.name}'`)
-              list.removeGallery(gid)
-              newList.addGallery(gid, token, note.value).then(response => {
-                console.debug(response)
+              if (list === newList) {
+                console.debug('updating gallery info')
+                const gallery = list.getGallery(gid)
+                gallery.note = note.value
                 _ULF.dict.save()
                 select('#favdel').checked = true
 
-                resolve('gallery moved')
+                resolve('gallery updated')
                 // don't understand why this needs to be here
                 window.opener.location.reload(false)
                 form.submit()
-              })
+              } else {
+                console.debug(`moving gallery from '${list.name}' to '${newList.name}'`)
+                list.removeGallery(gid)
+                newList.addGallery(gid, token, note.value).then(response => {
+                  console.debug(response)
+                  _ULF.dict.save()
+                  select('#favdel').checked = true
+
+                  resolve('gallery moved')
+                  // don't understand why this needs to be here
+                  window.opener.location.reload(false)
+                  form.submit()
+                })
+              }
             } else {
               console.debug(`moving gallery from ULF list '${list.name}' to '${currentClick}'`)
               list.removeGallery(gid)
@@ -1512,6 +1567,7 @@
 
     let inputcounter = 0
 
+    applyBtn.onclick = event => submitFavs(select("input[type='radio']:checked"), true)
     const newButton = (name, id, template, counter) => {
       const selection = template.cloneNode(true)
       const input = selection.firstElementChild.firstElementChild
