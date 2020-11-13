@@ -11,7 +11,7 @@
 // @grant          GM_getValue
 // @grant          GM_setValue
 // @grant          GM_addStyle
-// @version        1.0.0
+// @version        1.0.1
 // ==/UserScript==
 /* global GM_setValue GM_getValue GM_info GM_addStyle, selected, popUp, show_image_pane, hide_image_pane */
 
@@ -401,7 +401,7 @@
 
   // load persistently saved settings, or from a given JSON string
   function loadGM (importString) {
-    const GMString = String(importString || GM_getValue('__unlimitedfavs__', ''))
+    const GMString = String(importString || GM_getValue('favsJson', '') || GM_getValue('__unlimitedfavs__', ''))
     // set default if no import and no saved version
     const defaultValue = {
       lists: [{
@@ -462,6 +462,9 @@
 
       // update version
       GMJSON.version = GM_info.script.version
+
+      // remove old save data
+      GM_setValue('favsJson', '')
 
       return GMJSON
     } catch {
