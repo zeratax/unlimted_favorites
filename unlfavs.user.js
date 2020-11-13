@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name           dev unlimited favs
+// @name           unlimited favs
 // @namespace      mail@zera.tax
 // @author         ZerataX
 // @description    Adds unlimited local favorite lists to sadpanda
@@ -11,7 +11,7 @@
 // @grant          GM_getValue
 // @grant          GM_setValue
 // @grant          GM_addStyle
-// @version        0.8.1
+// @version        1.0.0
 // ==/UserScript==
 /* global GM_setValue GM_getValue GM_info GM_addStyle, selected, popUp, show_image_pane, hide_image_pane */
 
