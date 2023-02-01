@@ -468,7 +468,7 @@
 
       return GMJSON
     } catch {
-      window.alert('something went wrong trying to parse your settings, please download your settings and create an issue them attachedd here: https://github.com/ZerataX/unlimted_favorites/issues/new')
+      window.alert('something went wrong trying to parse your settings, please download your settings and create an issue with them attached here: https://github.com/ZerataX/unlimted_favorites/issues/new')
       const fileName = 'unl_favs_' + new Date().toISOString() + '.json'
       download(GMString, fileName, 'text/json')
       return defaultValue
@@ -477,7 +477,7 @@
 
   // SADPANDA API
   function handleErrors (response) {
-    if (!response.ok || response.statux === 200) {
+    if (!response.ok || response.status === 200) {
       throw Error(response.statusText)
     }
     return response
