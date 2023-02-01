@@ -11,7 +11,7 @@
 // @grant          GM_getValue
 // @grant          GM_setValue
 // @grant          GM_addStyle
-// @version        1.0.1
+// @version        1.1.0
 // ==/UserScript==
 /* global GM_setValue GM_getValue GM_info GM_addStyle, selected, popUp, show_image_pane, hide_image_pane */
 
@@ -91,7 +91,7 @@
         group: [],
         language: [],
         male: [],
-        misc: [],
+        other: [],
         parody: [],
         reclass: []
       }
@@ -104,7 +104,6 @@
           const [str, namespace, tag] = match
           const include = (str[0] !== '-')
           const regexString = tag
-          console.debug(tag)
 
           const regex = new RegExp(regexString.replace(/"/g, '')
             .replace(/\?/g, '.')
@@ -167,11 +166,11 @@
             case 'reclass':
               tags.reclass.push({ include, regex })
               break
-            case 'misc':
-              tags.misc.push({ include, regex })
+            case 'other':
+              tags.other.push({ include, regex })
               break
             case undefined:
-              tags.misc.push({ include, regex })
+              tags.other.push({ include, regex })
               break
             default:
               throw SyntaxError(`namespace '${namespace}' not supported`)
@@ -181,8 +180,8 @@
 
         const titleMatcher = (include, title, matchedTags = []) => {
           let match = false
-          if (!(tags.misc.length)) { return false }
-          tags.misc.forEach(tag => {
+          if (!(tags.other.length)) { return false }
+          tags.other.forEach(tag => {
             if (include) {
               if (tag.include && tag.regex.test(title)) {
                 matchedTags.push(tag)
@@ -201,8 +200,8 @@
         const includeMatcher = (includeTag, includeNamespace, tags) => {
           if (!includeTag.include) { return true }
           return tags.some(tag => {
-            const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['misc', tag]
-            if (includeNamespace === 'misc' || includeNamespace === namespace) {
+            const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['other', tag]
+            if (includeNamespace === 'other' || includeNamespace === namespace) {
               return includeTag.regex.test(name)
             }
             return false
@@ -236,12 +235,12 @@
         console.debug(`galleries after include: ${galleries.length}`)
 
         const excludeMatcher = (string) => {
-          const [namespace, name] = (string.includes(':')) ? string.split(':') : ['misc', string]
-          // check if string matches any tag in same namespace or in misc namespace
+          const [namespace, name] = (string.includes(':')) ? string.split(':') : ['other', string]
+          // check if string matches any tag in same namespace or in other namespace
           return (tags[namespace].some(tag => {
             if (tag.include) { return false }
             return tag.regex.test(name)
-          })) || (tags.misc.some(tag => {
+          })) || (tags.other.some(tag => {
             if (tag.include) { return false }
             return tag.regex.test(name)
           }))
@@ -459,6 +458,19 @@
         delete GMJSON.display
         delete GMJSON.order
       }
+      if (versionCompare(String(GMJSON.version), '1.1.0') === -1) {
+      // fix saved JSONs from < 1.1.0 versions
+      // misc got renamed to other
+        for (const list of GMJSON.lists) {
+          for (const gallery of list.galleries) {
+            for (const tags of gallery.info.tags) {
+                const other_tags = tags.misc
+                tags.other = other_tags
+                delete tags.misc
+            }
+          }
+        }
+      }
 
       // update version
       GMJSON.version = GM_info.script.version
@@ -477,7 +489,7 @@
 
   // SADPANDA API
   function handleErrors (response) {
-    if (!response.ok || response.status === 200) {
+    if (!response.ok || response.status !== 200) {
       throw Error(response.statusText)
     }
     return response
@@ -585,7 +597,7 @@
 
   function getCategoryClass (category) {
     switch (category) {
-      case 'Misc':
+      case 'other':
         return 'ct1'
       case 'Doujinshi':
         return 'ct2'
@@ -686,9 +698,9 @@
     if ('torrents' in gallery.info && gallery.info.torrents.length) {
       torrent.innerHTML = `<a href="/gallerytorrents.php?gid=${gallery.id}&t=${gallery.token}"` +
       `onclick="return popUp('/gallerytorrents.php?gid=${gallery.id}&t=${gallery.token}', 610, 590)" rel="nofollow">` +
-      '<img src="https://exhentai.org/img/t.png" alt="T" title="Show torrents"></a>'
+      '<img src="https://ehgt.org/g/t.png" alt="T" title="Show torrents"></a>'
     } else {
-      torrent.innerHTML = '<img src="https://exhentai.org/img/td.png" alt="T" title="No torrents available">'
+      torrent.innerHTML = '<img src="https://ehgt.org/g/td.png" alt="T" title="No torrents available">'
     }
     note.innerHTML = (gallery.note) ? `Note: ${gallery.note}` : ''
     note.id = `favnote_${gallery.id}`
@@ -701,13 +713,13 @@
     entryPoint.innerHTML = ''
     const tagsCategorized = {}
     gallery.info.tags.forEach(tag => {
-      const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['misc', tag]
+      const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['other', tag]
       if (!(namespace in tagsCategorized)) {
         tagsCategorized[namespace] = []
       }
       const highlight = tags
         ? (tags[namespace].some(matchTag => matchTag.include && matchTag.regex.test(name)) ||
-        tags.misc.some(matchTag => matchTag.include && matchTag.regex.test(name)))
+        tags.other.some(matchTag => matchTag.include && matchTag.regex.test(name)))
         : false
       tagsCategorized[namespace].push({ name, highlight })
     })
@@ -778,15 +790,15 @@
       character: [],
       group: [],
       language: [],
-      misc: [],
+      other: [],
       parody: [],
       reclass: []
     }
     gallery.info.tags.forEach(tag => {
-      const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['misc', tag]
+      const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['other', tag]
       const highlight = tags
         ? (tags[namespace].some(matchTag => matchTag.include && matchTag.regex.test(name)) ||
-        tags.misc.some(matchTag => matchTag.include && matchTag.regex.test(name)))
+        tags.other.some(matchTag => matchTag.include && matchTag.regex.test(name)))
         : false
       tagsCategorized[namespace].push({ name, highlight })
     })
@@ -879,15 +891,15 @@
       character: [],
       group: [],
       language: [],
-      misc: [],
+      other: [],
       parody: [],
       reclass: []
     }
     gallery.info.tags.forEach(tag => {
-      const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['misc', tag]
+      const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['other', tag]
       const highlight = tags
         ? (tags[namespace].some(matchTag => matchTag.include && matchTag.regex.test(name)) ||
-        tags.misc.some(matchTag => matchTag.include && matchTag.regex.test(name)))
+        tags.other.some(matchTag => matchTag.include && matchTag.regex.test(name)))
         : false
       if (highlight) {
         tagsCategorized[namespace].unshift({ name, highlight })
@@ -983,15 +995,15 @@
       character: [],
       group: [],
       language: [],
-      misc: [],
+      other: [],
       parody: [],
       reclass: []
     }
     gallery.info.tags.forEach(tag => {
-      const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['misc', tag]
+      const [namespace, name] = (tag.includes(':')) ? tag.split(':') : ['other', tag]
       const highlight = tags
         ? (tags[namespace].some(matchTag => matchTag.include && matchTag.regex.test(name)) ||
-        tags.misc.some(matchTag => matchTag.include && matchTag.regex.test(name)))
+        tags.other.some(matchTag => matchTag.include && matchTag.regex.test(name)))
         : false
       if (highlight) {
         tagsCategorized[namespace].unshift({ name, highlight })
@@ -1129,14 +1141,13 @@
     const lid = urlParams.get('lid')
     const parent = select('h1 + .nosel')
     const template = parent.children[9].cloneNode(true)
-    const sorter = select('.ido').children[3].firstElementChild
-    const order = sorter.innerText.split(' ')[1].trim().toLowerCase()
-    const mode = select('select')
+    const order = select('.searchnav').firstElementChild.firstElementChild
+    const mode = select('.searchnav').lastElementChild.firstElementChild
     const searchForm = select('form')
     const searchBox = select('input[name=f_search]')
+    console.debug(searchBox)
     const searchButton = select('input[type=submit]')
-    const [nameCheck, tagsCheck, noteCheck] = selectAll('input[type=checkbox')
-    const pageSelections = [select('.ptt tr'), select('.ptb tr')]
+    // const [nameCheck, tagsCheck, noteCheck] = selectAll('input[type=checkbox')
     const sum = select('.ip')
     const count = 200
 
@@ -1162,9 +1173,7 @@
       // TODO: disable search enter
 
       // change use posted/favorited order links
-      const orderLink = sorter.querySelector('a')
-      orderLink.href = '#'
-      orderLink.onclick = () => changeOrder(order)
+      order.onchange = event => changeOrder(event.srcElement.value)
 
       // change mode links
       mode.onchange = event => changeMode(event.srcElement.value)
@@ -1211,63 +1220,93 @@
         const search = (string)
           ? {
               text: string,
-              name: nameCheck.checked,
-              notes: noteCheck.checked,
-              tags: tagsCheck.checked
+              name: true,
+              notes: true,
+              tags: true
             }
           : false
         console.debug(search || 'no search')
-        const { galleries, number, tags } = list.galleries(search, order, page, count)
+        const { galleries, number, tags } = list.galleries(search, order.value === 'f' ? 'favorited' : 'posted', page, count)
         console.debug(`found ${number} galleries`)
 
-        sum.innerHTML = `Showing ${number.toLocaleString()} results`
-
-        orderLink.href = `#${string}`
-
         // adjust page selection
-        pageSelections.forEach(pageSelection => {
-          const pageTemplate = pageSelection.children[1].cloneNode(true)
-          const pages = Math.ceil(number / count)
-          pageSelection.innerHTML = ''
-
-          // < element
-          if (page === 0) {
-            pageSelection.appendChild(parser('<td class="ptdd">&lt;</td>'))
-          } else {
-            // if out of bounds
-            if ((page - 1) * count > number) {
-              console.error('out of bounds')
-            }
-            const pageElement = pageTemplate.cloneNode(true)
-            pageElement.querySelector('a').innerHTML = '<'
-            pageElement.querySelector('a').href = `/favorites.php?page=1&favcat=0&lid=${lid}&ulfpage=${page - 1}#${encodeURIComponent(string)}`
-            pageSelection.appendChild(pageElement)
-          }
-          // [0-9] elements
-          for (let index = 0; index < pages; index++) {
-            const pageElement = pageTemplate.cloneNode(true)
-            if (page !== index) {
-              pageElement.onclick = event => {
-                const href = event.srcElement.href || event.srcElement.firstElementChild.href
-                document.location = href
-              }
-              pageElement.classList.remove('ptds')
-            } else {
-              pageElement.classList.add('ptds')
-            }
-            pageElement.querySelector('a').innerHTML = index + 1
-            pageElement.querySelector('a').href = `/favorites.php?page=1&favcat=0&lid=${lid}&ulfpage=${index}#${encodeURIComponent(string)}`
-            pageSelection.appendChild(pageElement)
-          }
-          // > element
-          if (page === pages - 1) {
-            pageSelection.appendChild(parser('<td class="ptdd">&gt;</td>'))
-          } else {
-            pageTemplate.querySelector('a').innerHTML = '>'
-            pageTemplate.querySelector('a').href = `/favorites.php?page=1&favcat=0&lid=${lid}&ulfpage=${page + 1}#${encodeURIComponent(string)}`
-            pageTemplate.classList.remove('ptds')
-            pageSelection.appendChild(pageTemplate)
-          }
+        const pages = Math.ceil(number / count) || 1
+        console.debug(`showing page ${page+1} of ${pages}`)
+        const positions = ['u', 'd']
+        const actions = ['first', 'prev', 'jump', 'next', 'last']
+        positions.forEach(position => {
+            actions.forEach(action => {
+                let actionText = ''
+                switch(action) {
+                    case 'first':
+                      actionText = '<< First'
+                      break
+                    case 'prev':
+                      actionText = '< Previous'
+                      break
+                    case 'jump':
+                        actionText = 'Jump'
+                        break
+                    case 'next':
+                      actionText = 'Next >'
+                      break
+                    case 'last':
+                      actionText = 'Last >>'
+                      break
+                    default:
+                        break
+                }
+                const actionID = `${position}${action}`
+                const button = select(`#${actionID}`)
+                const span = document.createElement("span");
+                span.innerText = actionText
+                span.id = actionID
+                const link = document.createElement("a");
+                link.innerText = actionText
+                link.id = actionID
+                switch (action) {
+                    case 'first':
+                        if ( page !== 0 ) {
+                            link.href = `/favorites.php?page=1&favcat=0&lid=${lid}&ulfpage=0#${encodeURIComponent(string)}`
+                            button.replaceWith(link)
+                        } else {
+                            button.replaceWith(span)
+                        }
+                        break
+                    case 'previous':
+                        if ( page !== 0 ) {
+                            link.href = `/favorites.php?page=1&favcat=0&lid=${lid}&ulfpage=${page - 1}#${encodeURIComponent(string)}`
+                            button.replaceWith(link)
+                        } else {
+                            button.replaceWith(span)
+                        }
+                        break
+                    case 'jump':
+                        if ( pages > 0 ) {
+                            // jump selector
+                            button.replaceWith(span)
+                        } else {
+                            button.replaceWith(span)
+                        }
+                        break
+                    case 'next':
+                        if ( page !== pages - 1 ) {
+                            link.href = `/favorites.php?page=1&favcat=0&lid=${lid}&ulfpage=${page + 1}#${encodeURIComponent(string)}`
+                            button.replaceWith(link)
+                        } else {
+                            button.replaceWith(span)
+                        }
+                        break
+                    case 'last':
+                        if ( page !== pages - 1 ) {
+                            link.href = `/favorites.php?page=1&favcat=0&lid=${lid}&ulfpage=${pages - 1}#${encodeURIComponent(string)}`
+                            button.replaceWith(link)
+                        } else {
+                            button.replaceWith(span)
+                        }
+                        break
+                }
+            })
         })
 
         // add gallery items
@@ -1304,6 +1343,7 @@
       if (window.location.hash) {
         const hash = decodeURIComponent(window.location.hash.slice(1))
         searchBox.value = (hash !== 'false') ? hash : ''
+        console.debug(searchBox.value)
         insertGalleries(searchBox.value)
       } else {
         insertGalleries()
@@ -1315,9 +1355,9 @@
       //   let location = window.location.href.split('#')[0]
       //   searchForm.action = `${location}#${searchBox.value}`
       // }
-      nameCheck.onclick = () => insertGalleries(searchBox.value)
-      tagsCheck.onclick = () => insertGalleries(searchBox.value)
-      noteCheck.onclick = () => insertGalleries(searchBox.value)
+      // nameCheck.onclick = () => insertGalleries(searchBox.value)
+      // tagsCheck.onclick = () => insertGalleries(searchBox.value)
+      // noteCheck.onclick = () => insertGalleries(searchBox.value)
     }
 
     // insert favorite list items
@@ -1626,7 +1666,7 @@
   }
   // MAIN PAGE
   {
-    const mode = window.document.querySelector('select')
+    const mode = select('.searchnav').lastElementChild.firstElementChild
     const items = window.document.querySelectorAll('.gldown')
     // add fav highlight to gallery item
     console.debug(`changing favorite highlighting for ${items.length} galleries`)
